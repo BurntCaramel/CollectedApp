@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		B29517142532BA2400B472A1 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29517132532BA2400B472A1 /* Settings.swift */; };
+		B295171C2532DA2100B472A1 /* Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295171B2532DA2100B472A1 /* Content.swift */; };
 		B2FA9CB925077C4500C32EEC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CB825077C4500C32EEC /* AppDelegate.swift */; };
 		B2FA9CBB25077C4500C32EEC /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CBA25077C4500C32EEC /* SceneDelegate.swift */; };
 		B2FA9CBD25077C4500C32EEC /* FirstViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CBC25077C4500C32EEC /* FirstViewController.swift */; };
@@ -47,6 +48,7 @@
 
 /* Begin PBXFileReference section */
 		B29517132532BA2400B472A1 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
+		B295171B2532DA2100B472A1 /* Content.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Content.swift; sourceTree = "<group>"; };
 		B2FA9CB525077C4500C32EEC /* Collected.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Collected.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B2FA9CB825077C4500C32EEC /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		B2FA9CBA25077C4500C32EEC /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -128,6 +130,7 @@
 				B2FA9CFA250A4D9F00C32EEC /* NIO+Combine.swift */,
 				B29517132532BA2400B472A1 /* Settings.swift */,
 				B2FA9CBC25077C4500C32EEC /* FirstViewController.swift */,
+				B295171B2532DA2100B472A1 /* Content.swift */,
 				B2FA9CFC250B4A5500C32EEC /* ContentPreview.swift */,
 				B2FA9CBE25077C4500C32EEC /* SecondViewController.swift */,
 				B2FA9CC025077C4500C32EEC /* Main.storyboard */,
@@ -302,6 +305,7 @@
 				B2FA9CFD250B4A5500C32EEC /* ContentPreview.swift in Sources */,
 				B2FA9CBF25077C4500C32EEC /* SecondViewController.swift in Sources */,
 				B2FA9CBD25077C4500C32EEC /* FirstViewController.swift in Sources */,
+				B295171C2532DA2100B472A1 /* Content.swift in Sources */,
 				B2FA9CB925077C4500C32EEC /* AppDelegate.swift in Sources */,
 				B29517142532BA2400B472A1 /* Settings.swift in Sources */,
 				B2FA9CFB250A4D9F00C32EEC /* NIO+Combine.swift in Sources */,

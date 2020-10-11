@@ -251,6 +251,7 @@ struct BucketView: View {
 	struct NewState {
 		var key = ""
 		var mediaType = MediaType.textMarkdown
+		var stringContent = ""
 	}
 	@State var newState = NewState()
 	
@@ -262,7 +263,10 @@ struct BucketView: View {
 				Text("Markdown").tag(MediaType.textMarkdown)
 				Text("JSON").tag(MediaType.applicationJSON)
 			}
-			TextField("Content", text: self.$newState.key)
+			TextField("Content", text: self.$newState.stringContent)
+			Button("Create") {
+				//storesSource.createObject()
+			}
 		}
 	}
 	
