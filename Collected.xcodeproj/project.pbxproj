@@ -3,10 +3,11 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 50;
+	objectVersion = 52;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B29517142532BA2400B472A1 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29517132532BA2400B472A1 /* Settings.swift */; };
 		B2FA9CB925077C4500C32EEC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CB825077C4500C32EEC /* AppDelegate.swift */; };
 		B2FA9CBB25077C4500C32EEC /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CBA25077C4500C32EEC /* SceneDelegate.swift */; };
 		B2FA9CBD25077C4500C32EEC /* FirstViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CBC25077C4500C32EEC /* FirstViewController.swift */; };
@@ -16,6 +17,15 @@
 		B2FA9CC725077C4900C32EEC /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = B2FA9CC525077C4900C32EEC /* LaunchScreen.storyboard */; };
 		B2FA9CD225077C4900C32EEC /* CollectedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CD125077C4900C32EEC /* CollectedTests.swift */; };
 		B2FA9CDD25077C4900C32EEC /* CollectedUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CDC25077C4900C32EEC /* CollectedUITests.swift */; };
+		B2FA9CED2508D53F00C32EEC /* DynamoDB in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CEC2508D53F00C32EEC /* DynamoDB */; };
+		B2FA9CEF2508D53F00C32EEC /* IAM in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CEE2508D53F00C32EEC /* IAM */; };
+		B2FA9CF12508D53F00C32EEC /* APIGateway in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CF02508D53F00C32EEC /* APIGateway */; };
+		B2FA9CF32508D53F00C32EEC /* SNS in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CF22508D53F00C32EEC /* SNS */; };
+		B2FA9CF52508D53F00C32EEC /* SQS in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CF42508D53F00C32EEC /* SQS */; };
+		B2FA9CF72508D53F00C32EEC /* S3 in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CF62508D53F00C32EEC /* S3 */; };
+		B2FA9CF92508D53F00C32EEC /* Lambda in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CF82508D53F00C32EEC /* Lambda */; };
+		B2FA9CFB250A4D9F00C32EEC /* NIO+Combine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CFA250A4D9F00C32EEC /* NIO+Combine.swift */; };
+		B2FA9CFD250B4A5500C32EEC /* ContentPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CFC250B4A5500C32EEC /* ContentPreview.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,6 +46,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B29517132532BA2400B472A1 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		B2FA9CB525077C4500C32EEC /* Collected.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Collected.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B2FA9CB825077C4500C32EEC /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		B2FA9CBA25077C4500C32EEC /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -52,6 +63,8 @@
 		B2FA9CDC25077C4900C32EEC /* CollectedUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectedUITests.swift; sourceTree = "<group>"; };
 		B2FA9CDE25077C4900C32EEC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B2FA9CEA25077C6000C32EEC /* Collected.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Collected.entitlements; sourceTree = "<group>"; };
+		B2FA9CFA250A4D9F00C32EEC /* NIO+Combine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NIO+Combine.swift"; sourceTree = "<group>"; };
+		B2FA9CFC250B4A5500C32EEC /* ContentPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentPreview.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -59,6 +72,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B2FA9CF72508D53F00C32EEC /* S3 in Frameworks */,
+				B2FA9CF12508D53F00C32EEC /* APIGateway in Frameworks */,
+				B2FA9CF92508D53F00C32EEC /* Lambda in Frameworks */,
+				B2FA9CEF2508D53F00C32EEC /* IAM in Frameworks */,
+				B2FA9CED2508D53F00C32EEC /* DynamoDB in Frameworks */,
+				B2FA9CF32508D53F00C32EEC /* SNS in Frameworks */,
+				B2FA9CF52508D53F00C32EEC /* SQS in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -105,7 +125,10 @@
 				B2FA9CEA25077C6000C32EEC /* Collected.entitlements */,
 				B2FA9CB825077C4500C32EEC /* AppDelegate.swift */,
 				B2FA9CBA25077C4500C32EEC /* SceneDelegate.swift */,
+				B2FA9CFA250A4D9F00C32EEC /* NIO+Combine.swift */,
+				B29517132532BA2400B472A1 /* Settings.swift */,
 				B2FA9CBC25077C4500C32EEC /* FirstViewController.swift */,
+				B2FA9CFC250B4A5500C32EEC /* ContentPreview.swift */,
 				B2FA9CBE25077C4500C32EEC /* SecondViewController.swift */,
 				B2FA9CC025077C4500C32EEC /* Main.storyboard */,
 				B2FA9CC325077C4900C32EEC /* Assets.xcassets */,
@@ -149,6 +172,15 @@
 			dependencies = (
 			);
 			name = Collected;
+			packageProductDependencies = (
+				B2FA9CEC2508D53F00C32EEC /* DynamoDB */,
+				B2FA9CEE2508D53F00C32EEC /* IAM */,
+				B2FA9CF02508D53F00C32EEC /* APIGateway */,
+				B2FA9CF22508D53F00C32EEC /* SNS */,
+				B2FA9CF42508D53F00C32EEC /* SQS */,
+				B2FA9CF62508D53F00C32EEC /* S3 */,
+				B2FA9CF82508D53F00C32EEC /* Lambda */,
+			);
 			productName = Collected;
 			productReference = B2FA9CB525077C4500C32EEC /* Collected.app */;
 			productType = "com.apple.product-type.application";
@@ -196,7 +228,7 @@
 			isa = PBXProject;
 			attributes = {
 				LastSwiftUpdateCheck = 1170;
-				LastUpgradeCheck = 1170;
+				LastUpgradeCheck = 1200;
 				ORGANIZATIONNAME = "Patrick Smith";
 				TargetAttributes = {
 					B2FA9CB425077C4500C32EEC = {
@@ -221,6 +253,9 @@
 				Base,
 			);
 			mainGroup = B2FA9CAC25077C4400C32EEC;
+			packageReferences = (
+				B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */,
+			);
 			productRefGroup = B2FA9CB625077C4500C32EEC /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -264,9 +299,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B2FA9CFD250B4A5500C32EEC /* ContentPreview.swift in Sources */,
 				B2FA9CBF25077C4500C32EEC /* SecondViewController.swift in Sources */,
 				B2FA9CBD25077C4500C32EEC /* FirstViewController.swift in Sources */,
 				B2FA9CB925077C4500C32EEC /* AppDelegate.swift in Sources */,
+				B29517142532BA2400B472A1 /* Settings.swift in Sources */,
+				B2FA9CFB250A4D9F00C32EEC /* NIO+Combine.swift in Sources */,
 				B2FA9CBB25077C4500C32EEC /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -348,6 +386,7 @@
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
@@ -408,6 +447,7 @@
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
@@ -600,6 +640,55 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/swift-aws/aws-sdk-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.8.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B2FA9CEC2508D53F00C32EEC /* DynamoDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
+			productName = DynamoDB;
+		};
+		B2FA9CEE2508D53F00C32EEC /* IAM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
+			productName = IAM;
+		};
+		B2FA9CF02508D53F00C32EEC /* APIGateway */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
+			productName = APIGateway;
+		};
+		B2FA9CF22508D53F00C32EEC /* SNS */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
+			productName = SNS;
+		};
+		B2FA9CF42508D53F00C32EEC /* SQS */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
+			productName = SQS;
+		};
+		B2FA9CF62508D53F00C32EEC /* S3 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
+			productName = S3;
+		};
+		B2FA9CF82508D53F00C32EEC /* Lambda */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
+			productName = Lambda;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B2FA9CAD25077C4400C32EEC /* Project object */;
 }
