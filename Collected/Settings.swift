@@ -34,26 +34,15 @@ enum Settings {
 			]
 			
 			var queryResult: AnyObject?
-			let status: OSStatus = withUnsafeMutablePointer(to: &queryResult) {
-				let status = SecItemCopyMatching(query as CFDictionary, $0)
-				
-				print("LOADED AWS", $0.pointee, status)
-				
-				return status
-			}
-			
-			if status == errSecItemNotFound {
-				print("AWS credentials not found")
-				//            self.awsCredentials = nil
+			let status = SecItemCopyMatching(query as CFDictionary, &queryResult)
+			guard status == errSecSuccess else {
+				if status == errSecItemNotFound {
+					print("AWS credentials not found")
+				} else {
+					print("Couldn’t load AWS credentials (error \(status))")
+				}
 				return
 			}
-			
-			if status == errSecNoSuchAttr {
-				print("AWS credentials loaded with incorrect attr")
-				return
-			}
-			
-			print("LOADED AWS", queryResult)
 			
 			guard let existingItem = queryResult as? [String : AnyObject],
 						let account = existingItem[kSecAttrAccount as String] as? String,
