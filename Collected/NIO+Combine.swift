@@ -14,3 +14,9 @@ extension NIO.EventLoopFuture {
         Combine.Future(self.whenComplete)
     }
 }
+
+extension Combine.Deferred {
+	public init<Value>(createNIOFuture: @escaping () -> NIO.EventLoopFuture<Value>) where DeferredPublisher == Combine.Future<Value, Error> {
+		self.init(createPublisher: { createNIOFuture().toCombine() })
+	}
+}

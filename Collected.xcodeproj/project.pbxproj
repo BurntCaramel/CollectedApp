@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B282A63A253EBE5A003B865C /* ContentRepo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B282A639253EBE5A003B865C /* ContentRepo.swift */; };
 		B29517142532BA2400B472A1 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29517132532BA2400B472A1 /* Settings.swift */; };
 		B295171C2532DA2100B472A1 /* Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295171B2532DA2100B472A1 /* Content.swift */; };
 		B2FA9CB925077C4500C32EEC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CB825077C4500C32EEC /* AppDelegate.swift */; };
@@ -47,6 +48,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B282A639253EBE5A003B865C /* ContentRepo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentRepo.swift; sourceTree = "<group>"; };
 		B29517132532BA2400B472A1 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		B295171B2532DA2100B472A1 /* Content.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Content.swift; sourceTree = "<group>"; };
 		B2FA9CB525077C4500C32EEC /* Collected.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Collected.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -131,6 +133,7 @@
 				B29517132532BA2400B472A1 /* Settings.swift */,
 				B2FA9CBC25077C4500C32EEC /* FirstViewController.swift */,
 				B295171B2532DA2100B472A1 /* Content.swift */,
+				B282A639253EBE5A003B865C /* ContentRepo.swift */,
 				B2FA9CFC250B4A5500C32EEC /* ContentPreview.swift */,
 				B2FA9CBE25077C4500C32EEC /* SecondViewController.swift */,
 				B2FA9CC025077C4500C32EEC /* Main.storyboard */,
@@ -303,6 +306,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B2FA9CFD250B4A5500C32EEC /* ContentPreview.swift in Sources */,
+				B282A63A253EBE5A003B865C /* ContentRepo.swift in Sources */,
 				B2FA9CBF25077C4500C32EEC /* SecondViewController.swift in Sources */,
 				B2FA9CBD25077C4500C32EEC /* FirstViewController.swift in Sources */,
 				B295171C2532DA2100B472A1 /* Content.swift in Sources */,

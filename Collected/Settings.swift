@@ -10,9 +10,23 @@ import Foundation
 
 enum Settings {
 	struct AWSCredentials {
-		var accessKeyID: String
-		var secretAccessKey: String
+        var accessKeyID: String {
+            didSet {
+                accessKeyID = accessKeyID.trimmingCharacters(in: .whitespaces)
+            }
+        }
+        var secretAccessKey: String {
+            didSet {
+                accessKeyID = accessKeyID.trimmingCharacters(in: .whitespaces)
+            }
+        }
 		var region: String
+        
+        init(accessKeyID: String, secretAccessKey: String, region: String) {
+            self.accessKeyID = accessKeyID.trimmingCharacters(in: .whitespaces)
+            self.secretAccessKey = secretAccessKey.trimmingCharacters(in: .whitespaces)
+            self.region = region.trimmingCharacters(in: .whitespaces)
+        }
 	}
 	
 	class Source: ObservableObject {
@@ -47,7 +61,7 @@ enum Settings {
 			guard let existingItem = queryResult as? [String : AnyObject],
 						let account = existingItem[kSecAttrAccount as String] as? String,
 						let passwordData = existingItem[kSecValueData as String] as? Data,
-						let password = String(data: passwordData, encoding: String.Encoding.utf8)
+                        let password = String(data: passwordData, encoding: String.Encoding.utf8)
 			else {
 				print("Couldn't decode AWS", queryResult)
 				//                throw KeychainError.unexpectedPasswordData
