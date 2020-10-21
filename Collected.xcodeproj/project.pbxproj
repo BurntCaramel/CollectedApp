@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B24B22CE2540179500F0AC16 /* ViewModelCommon.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24B22CD2540179500F0AC16 /* ViewModelCommon.swift */; };
 		B282A63A253EBE5A003B865C /* ContentRepo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B282A639253EBE5A003B865C /* ContentRepo.swift */; };
 		B29517142532BA2400B472A1 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29517132532BA2400B472A1 /* Settings.swift */; };
 		B295171C2532DA2100B472A1 /* Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295171B2532DA2100B472A1 /* Content.swift */; };
@@ -48,6 +49,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B24B22CD2540179500F0AC16 /* ViewModelCommon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModelCommon.swift; sourceTree = "<group>"; };
 		B282A639253EBE5A003B865C /* ContentRepo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentRepo.swift; sourceTree = "<group>"; };
 		B29517132532BA2400B472A1 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		B295171B2532DA2100B472A1 /* Content.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Content.swift; sourceTree = "<group>"; };
@@ -134,6 +136,7 @@
 				B2FA9CBC25077C4500C32EEC /* FirstViewController.swift */,
 				B295171B2532DA2100B472A1 /* Content.swift */,
 				B282A639253EBE5A003B865C /* ContentRepo.swift */,
+				B24B22CD2540179500F0AC16 /* ViewModelCommon.swift */,
 				B2FA9CFC250B4A5500C32EEC /* ContentPreview.swift */,
 				B2FA9CBE25077C4500C32EEC /* SecondViewController.swift */,
 				B2FA9CC025077C4500C32EEC /* Main.storyboard */,
@@ -311,6 +314,7 @@
 				B2FA9CBD25077C4500C32EEC /* FirstViewController.swift in Sources */,
 				B295171C2532DA2100B472A1 /* Content.swift in Sources */,
 				B2FA9CB925077C4500C32EEC /* AppDelegate.swift in Sources */,
+				B24B22CE2540179500F0AC16 /* ViewModelCommon.swift in Sources */,
 				B29517142532BA2400B472A1 /* Settings.swift in Sources */,
 				B2FA9CFB250A4D9F00C32EEC /* NIO+Combine.swift in Sources */,
 				B2FA9CBB25077C4500C32EEC /* SceneDelegate.swift in Sources */,

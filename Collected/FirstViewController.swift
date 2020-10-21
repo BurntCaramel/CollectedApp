@@ -156,6 +156,7 @@ struct BucketView: View {
 	
 	var body: some View {
 		VStack {
+			Text("Load #\(bucketSource.loadClock.counter)")
 			Picker("Filter", selection: $filter) {
 				Text("All").tag(Filter.all)
 				Text("Texts").tag(Filter.text)

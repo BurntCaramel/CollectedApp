@@ -178,45 +178,100 @@ class StoresSource: ObservableObject {
 
 class BucketSource : ObservableObject {
 	let bucketName: String
-	
 	private let s3: S3
+	
+	fileprivate struct Producers {
+		let bucketName: String
+		let s3: S3
+		
+		init(bucketName: String, s3: S3) {
+			self.bucketName = bucketName
+			self.s3 = s3
+		}
+		
+//		fileprivate lazy var listProducer = Deferred { s3.listObjectsV2(.init(bucket: bucketName)) }
+//			.map({ $0.contents?.compactMap({ $0 }) ?? [] })
+//			.replaceError(with: [])
+//			.receive(on: DispatchQueue.main)
+//			.eraseToAnyPublisher()
+		
+		func list() -> AnyPublisher<[S3.Object], Never> {
+			return Deferred { s3.listObjectsV2(.init(bucket: bucketName)) }
+			.map({ $0.contents?.compactMap({ $0 }) ?? [] })
+			.replaceError(with: [])
+			.receive(on: DispatchQueue.main)
+			.eraseToAnyPublisher()
+		}
+		
+		func list<P : Publisher>(clock: P) -> AnyPublisher<[S3.Object], Never> where P.Failure == Never {
+			return clock
+				.map { _ in list() }
+				.switchToLatest()
+				.eraseToAnyPublisher()
+		}
+		
+		func create(content: ContentResource) -> AnyPublisher<S3.PutObjectOutput, Error> {
+			let contentID = content.id
+			let key = contentID.objectStorageKey
+			print("PUT OBJECT: KEY", key)
+			
+			let request = S3.PutObjectRequest(body: content.data, bucket: bucketName, contentType: contentID.mediaType.string, key: key)
+			return Deferred { s3.putObject(request) }
+				.print()
+				.receive(on: DispatchQueue.main)
+				.eraseToAnyPublisher()
+		}
+		
+		func delete(key: String) -> AnyPublisher<S3.DeleteObjectOutput, Error> {
+			return Deferred { s3.deleteObject(.init(bucket: bucketName, key: key)) }
+				.print()
+				.receive(on: DispatchQueue.main)
+				.eraseToAnyPublisher()
+		}
+	}
+	fileprivate let producers: Producers
 	
 	fileprivate init(bucketName: String, s3: S3) {
 		self.bucketName = bucketName
 		self.s3 = s3
+		
+		self.producers = .init(bucketName: bucketName, s3: s3)
 	}
 	
 	@Published var objects: [S3.Object]?
 	
-	var listCancellables = Set<AnyCancellable>()
+	class LocalClock : ObservableObject {
+		@Published private(set) var counter = 0
+		
+		func tick() {
+			counter += 1
+		}
+	}
+	
+	let loadClock = LocalClock()
+	
+	private lazy var listCancellable = producers.list(clock: loadClock.$counter)
+		.print("LOADING!")
+		.sink { self.objects = $0 }
+	
 	var createCancellables = Set<AnyCancellable>()
 	var deleteCancellables = Set<AnyCancellable>()
 	
-	private lazy var listProducer = Deferred { [s3, bucketName] in s3.listObjectsV2(.init(bucket: bucketName)) }
-		.map({ $0.contents?.compactMap({ $0 }) ?? [] })
-		.replaceError(with: [])
-		.receive(on: DispatchQueue.main)
-		.eraseToAnyPublisher()
-	
 	func load() {
-		print("RELOADING list bucket")
-		listCancellables.removeAll()
+		loadClock.tick()
+		_ = listCancellable
 		
-		listProducer
-			.sink { self.objects = $0 }
-			.store(in: &listCancellables)
+		//		_ = self.listCancellable
+		//		print("RELOADING list bucket")
+		//		listCancellables.removeAll()
+		//
+		//		listProducer
+		//			.sink { self.objects = $0 }
+		//			.store(in: &listCancellables)
 	}
 	
 	func create(content: ContentResource) {
-		let contentID = content.id
-		let key = contentID.objectStorageKey
-		print("PUT OBJECT: KEY", key)
-		
-		let request = S3.PutObjectRequest(body: content.data, bucket: bucketName, contentType: contentID.mediaType.string, key: key)
-		s3.putObject(request)
-			.toCombine()
-			.print()
-			.receive(on: DispatchQueue.main)
+		producers.create(content: content)
 			.sink { [self] completion in
 				switch completion {
 				case .finished:
@@ -229,11 +284,7 @@ class BucketSource : ObservableObject {
 	}
 	
 	func delete(key: String) {
-		let request = S3.DeleteObjectRequest(bucket: bucketName, key: key)
-		s3.deleteObject(request)
-			.toCombine()
-			.print()
-			.receive(on: DispatchQueue.main)
+		producers.delete(key: key)
 			.sink { [self] completion in
 				switch completion {
 				case .finished:
