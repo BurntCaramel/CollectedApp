@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import MobileCoreServices
 import SwiftUI
 import Combine
 import S3
@@ -173,6 +174,17 @@ struct BucketView: View {
 								print("DELETE!", key)
 								bucketSource.delete(key: key)
 							}
+						}
+					}
+				}
+				.onDelete { (indexSet) in
+					guard let objects = bucketSource.objects else { return }
+						
+					for index in indexSet {
+						let object = objects[index]
+						if let key = object.key {
+							print("DELETE!", key)
+							bucketSource.delete(key: key)
 						}
 					}
 				}
