@@ -42,6 +42,7 @@ enum MediaType : Hashable {
 		case json
 		case rss = "rss+xml"
 		case atom = "atom+xml"
+		case wasm
 		case javascript
 		case pdf
 		case zip
