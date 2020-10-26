@@ -153,16 +153,16 @@ struct BucketView: View {
 			}.pickerStyle(SegmentedPickerStyle())
 			List {
 				ForEach(bucketSource.objects ?? [], id: \.key) { object in
-					NavigationLink(destination: ObjectInfoView(bucketName: self.bucketName, objectKey: object.key ?? "", object: object)) {
+					NavigationLink(destination: ObjectInfoView(object: object, objectSource: bucketSource.useObject(key: object.key ?? ""))) {
 						Text(object.key ?? "")
-					}
-					.contextMenu {
-						Button("Delete") {
-							if let key = object.key {
-								print("DELETE!", key)
-								bucketSource.delete(key: key)
+							.contextMenu {
+								Button("Delete") {
+									if let key = object.key {
+										print("DELETE!", key)
+										bucketSource.delete(key: key)
+									}
+								}
 							}
-						}
 					}
 				}
 				.onDelete { (indexSet) in
@@ -185,36 +185,29 @@ struct BucketView: View {
 }
 
 struct ObjectInfoView: View {
-	var bucketName: String
-	var objectKey: String
 	var object: S3.Object
-	
-	@EnvironmentObject var storesSource: StoresSource
-	@State var output: S3.GetObjectOutput?
-	@State var cancellables = Set<AnyCancellable>()
-	
-	var objectPublisher: Publishers.MakeConnectable<AnyPublisher<S3.GetObjectOutput, Never>> {
-		storesSource.loadObject(bucketName: bucketName, objectKey: objectKey)
-	}
+	@ObservedObject var objectSource: S3ObjectSource
 	
 	var previewView: some View {
-		if let output = self.output, let mediaType = output.contentType, let contentData = output.body {
+		if
+			case let .success(output) = objectSource.getResult,
+			let mediaType = output.contentType,
+			let contentData = output.body
+		{
 			return AnyView(
 				VStack {
 					ContentPreview.PreviewView(mediaType: mediaType, contentData: contentData)
 				}
 			)
-		} else {
+		}
+		else {
 			return AnyView(Text("HAS NO PREVIEW"))
 		}
 	}
 	
 	var body: some View {
 		return VStack {
-			Text(objectKey)
-			Text("Size: \(object.size ?? 0)")
-			Text("Content type: \(output?.contentType ?? "")")
-			Text("Content bytes: \(output?.body?.count ?? 0)")
+			Text(objectSource.objectKey)
 			Button(action: load) { Text("Load") }
 			
 			VStack {
@@ -222,16 +215,11 @@ struct ObjectInfoView: View {
 				self.previewView
 			}
 		}
-		.navigationBarTitle("\(objectKey)", displayMode: .inline)
+		.navigationBarTitle("\(objectSource.objectKey)", displayMode: .inline)
 		.onAppear(perform: load)
-		.onReceive(objectPublisher) { (output) in
-			if output.eTag != self.output?.eTag {
-				self.output = output
-			}
-		}
 	}
 	
-	func load() {
-		objectPublisher.connect().store(in: &cancellables)
+	private func load() {
+		objectSource.load()
 	}
 }

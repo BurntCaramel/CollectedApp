@@ -27,93 +27,6 @@ class StoresSource: ObservableObject {
 		s3 = .init(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey, region: .uswest2)
 		//		s3 = .init(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey, region: .useast1)
 	}
-	
-	enum Cache {
-		enum Value {
-			case object(Publishers.MakeConnectable<AnyPublisher<S3.GetObjectOutput, Never>>)
-		}
-		enum Key {
-			case object(bucketName: String, objectKey: String)
-			
-			var identifier: String {
-				switch self {
-				case let .object(bucketName, objectKey):
-					return "object(bucketName: \(bucketName), objectKey: \(objectKey))"
-				}
-			}
-			
-			func produceValue(s3: S3) -> Value {
-				switch self {
-				case let .object(bucketName, objectKey):
-					return .object(
-						Deferred { () -> Combine.Future<S3.GetObjectOutput, Error> in
-							print("Deferred STARTING!")
-							let result = s3.getObject(.init(bucket: bucketName, key: objectKey))
-								.toCombine()
-							return result
-						}
-						.replaceError(with: .init())
-						.receive(on: DispatchQueue.main)
-						.print("OBJECT")
-						.share()
-						.eraseToAnyPublisher()
-						.makeConnectable()
-					)
-				}
-			}
-			
-			func read(cache: NSCache<NSString, Entry>, s3: S3) -> Value {
-				let key = self.identifier as NSString
-				if let entry = cache.object(forKey: key) {
-					print("REUSING entry", key)
-					return entry.value
-				}
-				
-				let value = produceValue(s3: s3)
-				let entry = Entry(value: value)
-				print("CREATING entry", key)
-				cache.setObject(entry, forKey: key)
-				return value
-			}
-		}
-		
-		final class Entry {
-			let value: Value
-			
-			init(value: Value) {
-				self.value = value
-			}
-		}
-	}
-	
-	private var cache = NSCache<NSString, Cache.Entry>()
-	
-	@Published var bucketsResult: Result<S3.ListBucketsOutput, Error>?
-	
-	var buckets: [S3.Bucket]? {
-		switch bucketsResult {
-		case .success(let output):
-			return output.buckets
-		default:
-			return nil
-		}
-	}
-	
-	func load() {
-		let s3 = self.s3
-		s3.listBuckets().whenComplete { (result) in
-			DispatchQueue.main.async {
-				self.bucketsResult = result
-			}
-		}
-	}
-	
-	func loadObject(bucketName: String, objectKey: String) -> Publishers.MakeConnectable<AnyPublisher<S3.GetObjectOutput, Never>> {
-		guard case let .object(publisher) = Cache.Key.object(bucketName: bucketName, objectKey: objectKey).read(cache: cache, s3: s3) else {
-			fatalError("Expected object")
-		}
-		return publisher
-	}
 }
 
 class S3Source : ObservableObject {
@@ -311,4 +224,39 @@ extension S3Source {
 
 extension StoresSource {
 	func bucket(name: String) -> BucketSource { .init(bucketName: name, s3: s3) }
+}
+
+class S3ObjectSource : ObservableObject {
+	private struct Producers {
+		let s3: S3
+		let bucketName: String
+		let objectKey: String
+		
+		func get() -> AnyPublisher<S3.GetObjectOutput, Error> {
+			return Deferred { s3.getObject(.init(bucket: bucketName, key: objectKey)) }
+				.receive(on: DispatchQueue.main)
+				.eraseToAnyPublisher()
+		}
+	}
+	private let producers: Producers
+	
+	init(bucketName: String, objectKey: String, s3: S3) {
+		self.producers = .init(s3: s3, bucketName: bucketName, objectKey: objectKey)
+	}
+	
+	var objectKey: String { producers.objectKey }
+	
+	@Published var getResult: Result<S3.GetObjectOutput, Error>?
+	
+	private lazy var getCancellable = producers.get()
+		.catchAsResult()
+		.sink { self.getResult = $0 }
+	
+	func load() {
+		_ = getCancellable
+	}
+}
+
+extension BucketSource {
+	func useObject(key: String) -> S3ObjectSource { .init(bucketName: bucketName, objectKey: key, s3: producers.s3) }
 }
