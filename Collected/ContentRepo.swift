@@ -116,6 +116,50 @@ class StoresSource: ObservableObject {
 	}
 }
 
+class S3Source : ObservableObject {
+	fileprivate struct Producers {
+		let s3: S3
+		
+		init(s3: S3) {
+			self.s3 = s3
+		}
+		
+		private func listBuckets() -> AnyPublisher<[S3.Bucket], Error> {
+			return Deferred { s3.listBuckets() }
+				.map({ $0.buckets?.compactMap({ $0 }) ?? [] })
+				.receive(on: DispatchQueue.main)
+				.eraseToAnyPublisher()
+		}
+		
+		func listBuckets<P : Publisher>(clock: P) -> AnyPublisher<Result<[S3.Bucket], Error>, Never> where P.Failure == Never {
+			return clock
+				.map { _ in listBuckets().catchAsResult() }
+				.switchToLatest()
+				.eraseToAnyPublisher()
+		}
+	}
+	private let producers: Producers
+	
+	fileprivate init(s3: S3) {
+		self.producers = .init(s3: s3)
+	}
+	
+	let loadClock = LocalClock()
+	@Published var bucketsResult: Result<[S3.Bucket], Error>?
+	
+	private lazy var listBucketsCancellable = producers.listBuckets(clock: loadClock.$counter)
+		.sink { self.bucketsResult = $0 }
+
+	func load() {
+		loadClock.tick()
+		_ = listBucketsCancellable
+	}
+}
+
+extension StoresSource {
+	func useBuckets() -> S3Source { .init(s3: s3) }
+}
+
 class BucketSource : ObservableObject {
 	let bucketName: String
 	private let s3: S3
@@ -259,6 +303,10 @@ class BucketSource : ObservableObject {
 	}
 	
 	func object(key: String) -> ObjectSource { .init(bucketSource: self, key: key) }
+}
+
+extension S3Source {
+	func bucket(name: String) -> BucketSource { .init(bucketName: name, s3: producers.s3) }
 }
 
 extension StoresSource {

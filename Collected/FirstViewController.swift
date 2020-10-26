@@ -33,24 +33,12 @@ struct StoresView: View {
 	//@ObservedObject var storesSource: StoresSource
 	@State var storesSource: StoresSource?
 	
-	@ViewBuilder
-	private var inner: some View {
-		if let storesSource = self.storesSource {
-			ListStoresView()
-				.environmentObject(storesSource)
-		} else {
-			Text("Set ")
-		}
-	}
-	
 	var body: some View {
 		VStack {
 			if let storesSource = self.storesSource {
-				//				let storesSource = self.storesSource!
-				ListStoresView()
-					.environmentObject(storesSource)
+				ListStoresView(bucketsSource: storesSource.useBuckets())
 			} else {
-				Text("Set ")
+				Text("You must set up your AWS credentials first")
 			}
 		}
 		.onAppear { settings.load() }
@@ -61,11 +49,11 @@ struct StoresView: View {
 }
 
 struct ListStoresView: View {
-	@EnvironmentObject var storesSource: StoresSource
+	@ObservedObject var bucketsSource: S3Source
 	
 	var bucketNames: [String] {
-		switch storesSource.buckets {
-		case .some(let buckets):
+		switch bucketsSource.bucketsResult {
+		case .success(let buckets):
 			return buckets.compactMap({ $0.name })
 		default:
 			return []
@@ -76,7 +64,7 @@ struct ListStoresView: View {
 		NavigationView {
 			List {
 				ForEach(bucketNames, id: \.self) { bucketName in
-					NavigationLink(destination: BucketView(bucketSource: storesSource.bucket(name: bucketName))) {
+					NavigationLink(destination: BucketView(bucketSource: bucketsSource.bucket(name: bucketName))) {
 						Text(bucketName)
 					}
 				}
@@ -84,7 +72,7 @@ struct ListStoresView: View {
 			.navigationBarTitle("Buckets")
 		}
 		.onAppear {
-			self.storesSource.load()
+			self.bucketsSource.load()
 		}
 	}
 }
