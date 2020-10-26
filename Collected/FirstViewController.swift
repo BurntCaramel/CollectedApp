@@ -154,15 +154,19 @@ struct BucketView: View {
 			List {
 				ForEach(bucketSource.objects ?? [], id: \.key) { object in
 					NavigationLink(destination: ObjectInfoView(object: object, objectSource: bucketSource.useObject(key: object.key ?? ""))) {
-						Text(object.key ?? "")
-							.contextMenu {
-								Button("Delete") {
-									if let key = object.key {
-										print("DELETE!", key)
-										bucketSource.delete(key: key)
+						HStack {
+							Text(object.key ?? "")
+								.contextMenu {
+									Button("Delete") {
+										if let key = object.key {
+											print("DELETE!", key)
+											bucketSource.delete(key: key)
+										}
 									}
 								}
-							}
+							Spacer()
+							Text(ByteCountFormatter.string(fromByteCount: object.size ?? 0, countStyle: .file))
+						}
 					}
 				}
 				.onDelete { (indexSet) in
