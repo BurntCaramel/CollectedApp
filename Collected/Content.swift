@@ -54,6 +54,7 @@ enum MediaType : Hashable {
 	//	case text(unknown: String)
 	case image(Image)
 	//	case image(unknown: String)
+	case application(Application)
 	case other(baseType: Base, subType: String)
 	case unknown(raw: String)
 	
@@ -90,6 +91,10 @@ enum MediaType : Hashable {
 		switch self {
 		case let .text(textType):
 			return "text/\(textType.rawValue)"
+		case let .image(imageType):
+			return "image/\(imageType.rawValue)"
+		case let .application(applicationType):
+			return "application/\(applicationType.rawValue)"
 		default:
 			return ""
 		}

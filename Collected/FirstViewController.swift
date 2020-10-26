@@ -84,6 +84,7 @@ struct BucketView: View {
 		case all
 		case text
 		case image
+		case pdf
 	}
 	
 	@State var filter: Filter = .all
@@ -102,33 +103,13 @@ struct BucketView: View {
 	
 	private var bucketName: String { bucketSource.bucketName }
 	
-	private var newFormView: some View {
-		HStack {
-			Form {
-				TextField("Key", text: $newState.key)
-				Picker("Media Type", selection: $newState.mediaType) {
-					Text("Plain text").tag(MediaType.text(.plain))
-					Text("Markdown").tag(MediaType.text(.markdown))
-					Text("JSON").tag(MediaType.text(.json))
-				}
-				TextField("Content", text: $newState.stringContent)
-				Button("Create") {
-					if let content = newState.content {
-						bucketSource.create(content: content)
-					}
-				}
-			}
-			
-			Spacer()
-			
-			Text("Drag and drop")
-		}
-		.background(isDropActive ? Color.red : Color.blue)
-		.onDrop(of: [kUTTypeText as String], isTargeted: $isDropActive) { (items) -> Bool in
-			print(kUTTypeText, kUTTypePlainText)
-			print("DROP", items)
-			for item in items {
-				item.loadDataRepresentation(forTypeIdentifier: kUTTypeText as String) { (data, error) in
+	struct Drop : DropDelegate {
+		let bucketSource: BucketSource
+		
+		func performDrop(info: DropInfo) -> Bool {
+			let textItems = info.itemProviders(for: [kUTTypeText as String])
+			for item in textItems {
+				_ = item.loadDataRepresentation(forTypeIdentifier: kUTTypeText as String, completionHandler: { (data, error) in
 					if let error = error {
 						print("DROP ERROR", error)
 					}
@@ -137,10 +118,49 @@ struct BucketView: View {
 						let content = ContentResource(data: data, mediaType: .text(.plain))
 						bucketSource.create(content: content)
 					}
+				})
+			}
+			
+			let pdfItems = info.itemProviders(for: [kUTTypePDF as String])
+			for item in pdfItems {
+				_ = item.loadDataRepresentation(forTypeIdentifier: kUTTypePDF as String, completionHandler: { (data, error) in
+					if let error = error {
+						print("DROP ERROR", error)
+					}
+					if let data = data {
+						print("RECEIVED DATA", data)
+						let content = ContentResource(data: data, mediaType: .application(.pdf))
+						bucketSource.create(content: content)
+					}
+				})
+			}
+			
+			return textItems.count + pdfItems.count > 0
+		}
+	}
+	
+	private var newFormView: some View {
+		VStack {
+			Form {
+				TextField("Key", text: $newState.key)
+				Picker("Media Type", selection: $newState.mediaType) {
+					Text("Plain text").tag(MediaType.text(.plain))
+					Text("Markdown").tag(MediaType.text(.markdown))
+					Text("JSON").tag(MediaType.text(.json))
+				}
+				TextField("Content", text: $newState.stringContent)
+					.lineLimit(6)
+				Button("Create") {
+					if let content = newState.content {
+						bucketSource.create(content: content)
+					}
 				}
 			}
-			return true
+			
+			Text("Drag and drop")
 		}
+		.background(isDropActive ? Color.red : Color.blue)
+		.onDrop(of: [kUTTypeText as String, kUTTypePDF as String], delegate: Drop(bucketSource: bucketSource))
 	}
 	
 	var body: some View {
@@ -150,6 +170,7 @@ struct BucketView: View {
 				Text("All").tag(Filter.all)
 				Text("Texts").tag(Filter.text)
 				Text("Images").tag(Filter.image)
+				Text("PDFs").tag(Filter.image)
 			}.pickerStyle(SegmentedPickerStyle())
 			List {
 				ForEach(bucketSource.objects ?? [], id: \.key) { object in
