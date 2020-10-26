@@ -12,6 +12,14 @@ import S3
 import NIO
 import CryptoKit
 
+class LocalClock : ObservableObject {
+	@Published private(set) var counter = 0
+	
+	func tick() {
+		counter += 1
+	}
+}
+
 class StoresSource: ObservableObject {
 	private let s3: S3
 	
@@ -22,22 +30,13 @@ class StoresSource: ObservableObject {
 	
 	enum Cache {
 		enum Value {
-			case bucketLocation(AnyPublisher<S3.BucketLocationConstraint?, Never>)
-			case objects(AnyPublisher<[S3.Object], Never>)
-			//case object(AnyPublisher<S3.GetObjectOutput, Never>)
 			case object(Publishers.MakeConnectable<AnyPublisher<S3.GetObjectOutput, Never>>)
 		}
 		enum Key {
-			case bucketLocation(bucket: String)
-			case objects(forBucket: String)
 			case object(bucketName: String, objectKey: String)
 			
 			var identifier: String {
 				switch self {
-				case let .bucketLocation(bucketName):
-					return "bucketLocation(bucket: \(bucketName))"
-				case let .objects(bucketName):
-					return "objects(forBucket: \(bucketName))"
 				case let .object(bucketName, objectKey):
 					return "object(bucketName: \(bucketName), objectKey: \(objectKey))"
 				}
@@ -45,24 +44,6 @@ class StoresSource: ObservableObject {
 			
 			func produceValue(s3: S3) -> Value {
 				switch self {
-				case let .bucketLocation(bucketName):
-					return Value.bucketLocation(
-						s3.getBucketLocation(.init(bucket: bucketName))
-							.toCombine()
-							.map({ $0.locationConstraint })
-							.replaceError(with: nil)
-							.receive(on: DispatchQueue.main)
-							.eraseToAnyPublisher()
-					)
-				case let .objects(bucketName):
-					return .objects(
-						s3.listObjectsV2(.init(bucket: bucketName))
-							.toCombine()
-							.map({ $0.contents?.compactMap({ $0 }) ?? [] })
-							.replaceError(with: [])
-							.receive(on: DispatchQueue.main)
-							.eraseToAnyPublisher()
-					)
 				case let .object(bucketName, objectKey):
 					return .object(
 						Deferred { () -> Combine.Future<S3.GetObjectOutput, Error> in
@@ -127,52 +108,11 @@ class StoresSource: ObservableObject {
 		}
 	}
 	
-	//    func listBucket(bucketName: String) -> AnyPublisher<[S3.Object], Never> {
-	//        let s3 = self.s3
-	//        return Combine.Future { promise in
-	//            s3.listObjectsV2(.init(bucket: bucketName)).map({ (output) in
-	//                output.contents?.compactMap({ $0 }) ?? []
-	//            }).whenComplete(promise)
-	//        }
-	//        .replaceError(with: .init())
-	//        .receive(on: DispatchQueue.main)
-	//        .eraseToAnyPublisher()
-	//    }
-	
-	func loadBucketLocation(bucketName: String) -> AnyPublisher<S3.BucketLocationConstraint?, Never> {
-		guard case let .bucketLocation(location) = Cache.Key.bucketLocation(bucket: bucketName).read(cache: cache, s3: s3) else {
-			fatalError("Expected bucket location")
-		}
-		return location
-	}
-	
-	func listBucket(bucketName: String) -> AnyPublisher<[S3.Object], Never> {
-		guard case let .objects(publisher) = Cache.Key.objects(forBucket: bucketName).read(cache: cache, s3: s3) else {
-			fatalError("Expected objects")
-		}
-		return publisher
-	}
-	
 	func loadObject(bucketName: String, objectKey: String) -> Publishers.MakeConnectable<AnyPublisher<S3.GetObjectOutput, Never>> {
 		guard case let .object(publisher) = Cache.Key.object(bucketName: bucketName, objectKey: objectKey).read(cache: cache, s3: s3) else {
 			fatalError("Expected object")
 		}
 		return publisher
-	}
-	
-	func createObject(bucketName: String, content: ContentResource) -> AnyPublisher<S3.PutObjectOutput, Error> {
-		let contentType = content.id.mediaType.string
-		let digest = content.id.sha256Digest
-		let digestHex = digest.map { String(format: "%02x", $0) }.joined()
-		let key = "sha256/\(contentType)/\(digestHex)"
-		print("PUT OBJECT: KEY", key)
-		let request = S3.PutObjectRequest(body: content.data, bucket: bucketName, contentType: contentType, key: key)
-		return s3.putObject(request)
-			.toCombine()
-			.print()
-			.receive(on: DispatchQueue.main)
-			//            .replaceError(with: nil)
-			.eraseToAnyPublisher()
 	}
 }
 
@@ -239,14 +179,6 @@ class BucketSource : ObservableObject {
 	}
 	
 	@Published var objects: [S3.Object]?
-	
-	class LocalClock : ObservableObject {
-		@Published private(set) var counter = 0
-		
-		func tick() {
-			counter += 1
-		}
-	}
 	
 	let loadClock = LocalClock()
 	
