@@ -11,12 +11,22 @@ import Combine
 import S3
 import NIO
 import CryptoKit
+import SwiftUI
 
+@propertyWrapper
 class LocalClock : ObservableObject {
 	@Published private(set) var counter = 0
 	
 	func tick() {
 		counter += 1
+	}
+	
+	var wrappedValue: LocalClock {
+		self
+	}
+	
+	var projectedValue: Published<Int>.Publisher {
+		self.$counter
 	}
 }
 
@@ -86,23 +96,40 @@ class BucketSource : ObservableObject {
 			self.s3 = s3
 		}
 		
-//		fileprivate lazy var listProducer = Deferred { s3.listObjectsV2(.init(bucket: bucketName)) }
-//			.map({ $0.contents?.compactMap({ $0 }) ?? [] })
-//			.replaceError(with: [])
-//			.receive(on: DispatchQueue.main)
-//			.eraseToAnyPublisher()
+		struct ListFilter {
+			enum ContentType {
+				case all
+				case texts
+				case images
+				case pdfs
+				
+				var prefix: String? {
+					switch self {
+					case .all:
+						return nil
+					case .texts:
+						return "sha256/text/"
+					case .images:
+						return "sha256/image/"
+					case .pdfs:
+						return "sha256/application/pdf/"
+					}
+				}
+			}
+			var contentType: ContentType
+		}
 		
-		func list() -> AnyPublisher<[S3.Object], Never> {
-			return Deferred { s3.listObjectsV2(.init(bucket: bucketName)) }
+		private func list(filter: ListFilter) -> AnyPublisher<[S3.Object], Never> {
+			return Deferred { s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix)) }
 			.map({ $0.contents?.compactMap({ $0 }) ?? [] })
 			.replaceError(with: [])
 			.receive(on: DispatchQueue.main)
 			.eraseToAnyPublisher()
 		}
 		
-		func list<P : Publisher>(clock: P) -> AnyPublisher<[S3.Object], Never> where P.Failure == Never {
+		func list<P : Publisher>(clock: P, filter: ListFilter) -> AnyPublisher<[S3.Object], Never> where P.Failure == Never {
 			return clock
-				.map { _ in list() }
+				.map { _ in list(filter: filter) }
 				.switchToLatest()
 				.eraseToAnyPublisher()
 		}
@@ -136,28 +163,50 @@ class BucketSource : ObservableObject {
 	}
 	
 	@Published var objects: [S3.Object]?
-	
 	let loadClock = LocalClock()
-	
-	private lazy var listCancellable = producers.list(clock: loadClock.$counter)
-		.print("LOADING!")
+	private lazy var listCancellable = producers.list(clock: loadClock.$counter, filter: .init(contentType: .all))
+		.print("LOADING ALL!")
 		.sink { self.objects = $0 }
-	
-	var createCancellables = Set<AnyCancellable>()
-	var deleteCancellables = Set<AnyCancellable>()
 	
 	func load() {
 		loadClock.tick()
 		_ = listCancellable
-		
-		//		_ = self.listCancellable
-		//		print("RELOADING list bucket")
-		//		listCancellables.removeAll()
-		//
-		//		listProducer
-		//			.sink { self.objects = $0 }
-		//			.store(in: &listCancellables)
 	}
+	
+	@Published var textObjects: [S3.Object]?
+	@LocalClock var loadTextsClock
+//	let loadTextsClock = LocalClock()
+	private lazy var listTextsCancellable = producers.list(clock: $loadTextsClock, filter: .init(contentType: .texts))
+		.print("LOADING TEXTS!")
+		.sink { self.textObjects = $0 }
+	
+	func loadTexts() {
+		loadTextsClock.tick()
+		_ = listTextsCancellable
+	}
+	
+	@Published var imageObjects: [S3.Object]?
+	@LocalClock var loadImagesClock
+	private lazy var listImagesCancellable = producers.list(clock: $loadImagesClock, filter: .init(contentType: .images))
+		.print("LOADING IMAGES!")
+		.sink { self.imageObjects = $0 }
+	func loadImages() {
+		loadImagesClock.tick()
+		_ = listImagesCancellable
+	}
+	
+	@Published var pdfObjects: [S3.Object]?
+	@LocalClock var loadPDFsClock
+	private lazy var listPDFsCancellable = producers.list(clock: $loadPDFsClock, filter: .init(contentType: .pdfs))
+		.print("LOADING PDFS!")
+		.sink { self.pdfObjects = $0 }
+	func loadPDFs() {
+		loadPDFsClock.tick()
+		_ = listPDFsCancellable
+	}
+	
+	var createCancellables = Set<AnyCancellable>()
+	var deleteCancellables = Set<AnyCancellable>()
 	
 	func create(content: ContentResource) {
 		producers.create(content: content)

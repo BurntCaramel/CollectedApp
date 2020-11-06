@@ -157,23 +157,48 @@ struct BucketView: View {
 				}
 			}
 			
-			Text("Drag and drop")
+			Text("Drop to upload")
 		}
 		.background(isDropActive ? Color.red : Color.blue)
 		.onDrop(of: [kUTTypeText as String, kUTTypePDF as String], delegate: Drop(bucketSource: bucketSource))
 	}
 	
+	var objects: [S3.Object] {
+		switch filter {
+		case .text:
+			return bucketSource.textObjects ?? []
+		case .image:
+			return bucketSource.imageObjects ?? []
+		case .pdf:
+			return bucketSource.pdfObjects ?? []
+		case .all:
+			return bucketSource.objects ?? []
+		}
+	}
+	
 	var body: some View {
 		VStack {
 			Text("Load #\(bucketSource.loadClock.counter)")
+			
+			switch filter {
+			case .text:
+				Text("").onAppear(perform: bucketSource.loadTexts)
+			case .image:
+				Text("").onAppear(perform: bucketSource.loadImages)
+			case .pdf:
+				Text("").onAppear(perform: bucketSource.loadPDFs)
+			case .all:
+				Text("").onAppear(perform: bucketSource.load)
+			}
+			
 			Picker("Filter", selection: $filter) {
 				Text("All").tag(Filter.all)
 				Text("Texts").tag(Filter.text)
 				Text("Images").tag(Filter.image)
-				Text("PDFs").tag(Filter.image)
+				Text("PDFs").tag(Filter.pdf)
 			}.pickerStyle(SegmentedPickerStyle())
 			List {
-				ForEach(bucketSource.objects ?? [], id: \.key) { object in
+				ForEach(objects, id: \.key) { object in
 					NavigationLink(destination: ObjectInfoView(object: object, objectSource: bucketSource.useObject(key: object.key ?? ""))) {
 						HStack {
 							Text(object.key ?? "")
