@@ -49,6 +49,7 @@ class FirstHostingController: UIHostingController<StoresView> {
 	}
 	
 	override func viewWillDisappear(_ animated: Bool) {
+		cancellables.removeAll()
 		self.storesSource = nil
 		
 		super.viewWillDisappear(animated)
