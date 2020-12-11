@@ -9,6 +9,7 @@
 import Foundation
 import Combine
 import S3
+import AWSSDKSwiftCore
 import NIO
 import CryptoKit
 import SwiftUI
@@ -146,6 +147,15 @@ class BucketSource : ObservableObject {
 				.eraseToAnyPublisher()
 		}
 		
+		func makePublicReadable(contentID: ContentIdentifier) -> AnyPublisher<S3.PutObjectAclOutput, Error> {
+			let key = contentID.objectStorageKey
+			
+			let request = S3.PutObjectAclRequest(acl: .publicRead, bucket: bucketName, key: key)
+			return Deferred { s3.putObjectAcl(request) }
+				.receive(on: DispatchQueue.main)
+				.eraseToAnyPublisher()
+		}
+		
 		func delete(key: String) -> AnyPublisher<S3.DeleteObjectOutput, Error> {
 			return Deferred { s3.deleteObject(.init(bucket: bucketName, key: key)) }
 				.print()
@@ -243,24 +253,42 @@ class BucketSource : ObservableObject {
 			self.key = key
 		}
 		
-		private var cancellable: AnyCancellable?
+		private var cancellables = Set<AnyCancellable>()
 		@Published private var getObjectOutput: S3.GetObjectOutput?
+		@Published private var getACLOutput: S3.GetObjectAclOutput?
 		
 		var data: Data? {
 			getObjectOutput?.body
 		}
 		
-		private lazy var producer = bucketSource.s3
+		var isPublicReadable: Bool? {
+			nil
+		}
+		
+		private lazy var getDataProducer = bucketSource.s3
 			.getObject(.init(bucket: bucketSource.bucketName, key: key))
 			.toCombine()
 			.receive(on: DispatchQueue.main)
 		
+		private lazy var getACLProducer = bucketSource.s3
+			.getObjectAcl(.init(bucket: bucketSource.bucketName, key: key))
+			.toCombine()
+			.receive(on: DispatchQueue.main)
+		
 		func load() {
-			self.cancellable = producer.sink { (completion) in
+			getDataProducer.sink { (completion) in
 				print("COMPLETED", completion)
 			} receiveValue: { (output) in
 				self.getObjectOutput = output
 			}
+			.store(in: &cancellables)
+			
+			getACLProducer.sink { (completion) in
+				
+			} receiveValue: { (output) in
+				self.getACLOutput = output
+			}
+			.store(in: &cancellables)
 		}
 	}
 	
