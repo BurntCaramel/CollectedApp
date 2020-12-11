@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import UniformTypeIdentifiers
 import MobileCoreServices
 import SwiftUI
 import Combine
@@ -107,35 +108,27 @@ struct BucketView: View {
 		let bucketSource: BucketSource
 		
 		func performDrop(info: DropInfo) -> Bool {
-			let textItems = info.itemProviders(for: [kUTTypeText as String])
-			for item in textItems {
-				_ = item.loadDataRepresentation(forTypeIdentifier: kUTTypeText as String, completionHandler: { (data, error) in
-					if let error = error {
-						print("DROP ERROR", error)
-					}
-					if let data = data {
-						print("RECEIVED DATA", data)
-						let content = ContentResource(data: data, mediaType: .text(.plain))
-						bucketSource.create(content: content)
-					}
-				})
+			var count = 0
+			
+			for mediaType in [MediaType.text(.plain), .image(.png), .application(.pdf)] {
+				let uti = mediaType.uti!
+				let itemProviders = info.itemProviders(for: [uti])
+				for item in itemProviders {
+					_ = item.loadDataRepresentation(forTypeIdentifier: uti.identifier, completionHandler: { (data, error) in
+						if let error = error {
+							print("DROP ERROR", error, mediaType)
+						}
+						if let data = data {
+							print("RECEIVED DATA", data)
+							let content = ContentResource(data: data, mediaType: mediaType)
+							bucketSource.create(content: content)
+							count += 1
+						}
+					})
+				}
 			}
 			
-			let pdfItems = info.itemProviders(for: [kUTTypePDF as String])
-			for item in pdfItems {
-				_ = item.loadDataRepresentation(forTypeIdentifier: kUTTypePDF as String, completionHandler: { (data, error) in
-					if let error = error {
-						print("DROP ERROR", error)
-					}
-					if let data = data {
-						print("RECEIVED DATA", data)
-						let content = ContentResource(data: data, mediaType: .application(.pdf))
-						bucketSource.create(content: content)
-					}
-				})
-			}
-			
-			return textItems.count + pdfItems.count > 0
+			return count > 0
 		}
 	}
 	
@@ -160,7 +153,7 @@ struct BucketView: View {
 			Text("Drop to upload")
 		}
 		.background(isDropActive ? Color.red : Color.blue)
-		.onDrop(of: [kUTTypeText as String, kUTTypePDF as String], delegate: Drop(bucketSource: bucketSource))
+		.onDrop(of: [UTType.text, UTType.pdf], delegate: Drop(bucketSource: bucketSource))
 	}
 	
 	var objects: [S3.Object] {
@@ -246,7 +239,7 @@ struct ObjectInfoView: View {
 		{
 			return AnyView(
 				VStack {
-					ContentPreview.PreviewView(mediaType: mediaType, contentData: contentData)
+					ContentPreview.PreviewView(mediaType: MediaType(string: mediaType), contentData: contentData)
 				}
 			)
 		}
@@ -261,7 +254,6 @@ struct ObjectInfoView: View {
 			Button(action: load) { Text("Load") }
 			
 			VStack {
-				Text("preview!")
 				self.previewView
 			}
 		}

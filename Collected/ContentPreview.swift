@@ -11,22 +11,24 @@ import SwiftUI
 
 enum ContentPreview {
 	struct PreviewView: View {
-		var mediaType: String
+		var mediaType: MediaType
 		var contentData: Data
 		
 		var body: some View {
 			VStack {
-				if (mediaType.starts(with: "text/")) {
-					TextPreviewView(mediaType: mediaType, contentData: contentData)
-				} else {
-					Text("Can’t preview")
+				switch mediaType {
+				case .text:
+					TextPreview(contentData: contentData)
+				case .image:
+					ImagePreview(contentData: contentData)
+				default:
+					Text("Can’t preview \(mediaType.string)")
 				}
 			}
 		}
 	}
 	
-	struct TextPreviewView: View {
-		var mediaType: String
+	private struct TextPreview: View {
 		var contentData: Data
 		
 		var contentString: String? {
@@ -37,6 +39,22 @@ enum ContentPreview {
 			Text(contentString ?? "")
 				.frame(maxWidth: .infinity)
 				.border(Color.gray)
+		}
+	}
+	
+	private struct ImagePreview: View {
+		var contentData: Data
+		
+		var uiImage: UIImage? {
+			UIImage(data: contentData)
+		}
+		
+		var body: some View {
+			if let uiImage = uiImage {
+				Image(uiImage: uiImage)
+			} else {
+				Text("Can’t preview image")
+			}
 		}
 	}
 }

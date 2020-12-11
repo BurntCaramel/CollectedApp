@@ -8,6 +8,7 @@
 
 import Foundation
 import CryptoKit
+import UniformTypeIdentifiers
 
 // See: https://github.com/onevcat/MimeType/blob/master/Sources/MimeType.swift
 
@@ -58,7 +59,7 @@ enum MediaType : Hashable {
 	case other(baseType: Base, subType: String)
 	case unknown(raw: String)
 	
-	init?(string: String) {
+	init(string: String) {
 		let components = string.split(separator: "/", maxSplits: 1)
 		let baseRaw = String(components[0])
 		let subtypeRaw = String(components[1])
@@ -83,8 +84,6 @@ enum MediaType : Hashable {
 		} else {
 			self = .unknown(raw: string)
 		}
-		
-		return nil
 	}
 	
 	var string: String {
@@ -97,6 +96,43 @@ enum MediaType : Hashable {
 			return "application/\(applicationType.rawValue)"
 		default:
 			return ""
+		}
+	}
+	
+	var uti: UTType? {
+		switch self {
+		case let .text(textType):
+			switch textType {
+			case .plain: return .plainText
+			case .markdown: return UTType(exportedAs: "net.daringfireball.markdown", conformingTo: .plainText)
+			case .html: return .html
+			case .json: return .json
+			case .css: return .plainText
+			case .xml: return .xml
+			}
+		case let .image(imageType):
+			switch imageType {
+			case .png: return .png
+			case .gif: return .gif
+			case .jpeg: return .jpeg
+			case .tiff: return .tiff
+			case .svg: return .svg
+			case .webp: return .webP
+			}
+		case let .application(applicationType):
+			switch applicationType {
+			case .pdf: return .pdf
+			case .javascript: return .javaScript
+			case .octetStream: return .data
+			case .json: return .json
+			case .rss: return .xml
+			case .zip: return .zip
+			case .fontWoff: return .data
+			case .wasm: return .data
+			case .atom: return .xml
+			}
+		default:
+			return nil
 		}
 	}
 }
