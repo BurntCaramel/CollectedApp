@@ -8,8 +8,7 @@
 
 import Foundation
 import Combine
-import S3
-import AWSSDKSwiftCore
+import SotoS3
 import NIO
 import CryptoKit
 import SwiftUI
@@ -32,11 +31,19 @@ class LocalClock : ObservableObject {
 }
 
 class StoresSource: ObservableObject {
+	private let awsClient: AWSClient
 	private let s3: S3
 	
 	init(awsCredentials: Settings.AWSCredentials) {
-		s3 = .init(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey, region: .uswest2)
+		awsClient = AWSClient(credentialProvider: .static(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey), httpClientProvider: .createNew)
+		//let awsClient = AWSClient(credentialProvider: .static(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey))
+		s3 = S3(client: awsClient, region: .uswest2)
+		//s3 = .init(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey, region: .uswest2)
 		//		s3 = .init(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey, region: .useast1)
+	}
+	
+	func shutdown() {
+		try? awsClient.syncShutdown()
 	}
 }
 
@@ -140,7 +147,7 @@ class BucketSource : ObservableObject {
 			let key = contentID.objectStorageKey
 			print("PUT OBJECT: KEY", key)
 			
-			let request = S3.PutObjectRequest(body: content.data, bucket: bucketName, contentType: contentID.mediaType.string, key: key)
+			let request = S3.PutObjectRequest(body: AWSPayload.data(content.data), bucket: bucketName, contentType: contentID.mediaType.string, key: key)
 			return Deferred { s3.putObject(request) }
 				.print()
 				.receive(on: DispatchQueue.main)
@@ -258,7 +265,7 @@ class BucketSource : ObservableObject {
 		@Published private var getACLOutput: S3.GetObjectAclOutput?
 		
 		var data: Data? {
-			getObjectOutput?.body
+			getObjectOutput?.body?.asData()
 		}
 		
 		var isPublicReadable: Bool? {

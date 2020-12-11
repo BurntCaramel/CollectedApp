@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 import MobileCoreServices
 import SwiftUI
 import Combine
-import S3
+import SotoS3
 import NIO
 import CryptoKit
 
@@ -23,16 +23,40 @@ class FirstViewController: UIViewController {
 
 class FirstHostingController: UIHostingController<StoresView> {
 	var settings = Settings.Source()
+	var storesSource: StoresSource? {
+		willSet {
+			storesSource?.shutdown()
+		}
+		didSet {
+			self.rootView = .init(storesSource: storesSource)
+		}
+	}
+	
+	var cancellables = Set<AnyCancellable>()
 	
 	required init?(coder decoder: NSCoder) {
-		super.init(coder: decoder, rootView: StoresView(settings: settings))
+		super.init(coder: decoder, rootView: StoresView(storesSource: storesSource))
+	}
+	
+	override func viewDidAppear(_ animated: Bool) {
+		settings.$awsCredentials.sink { [weak self] (awsCredentials) in
+			self?.storesSource = StoresSource(awsCredentials: awsCredentials)
+		}.store(in: &cancellables)
+		
+		settings.load()
+		
+		super.viewDidAppear(animated)
+	}
+	
+	override func viewWillDisappear(_ animated: Bool) {
+		self.storesSource = nil
+		
+		super.viewWillDisappear(animated)
 	}
 }
 
 struct StoresView: View {
-	@ObservedObject var settings: Settings.Source
-	//@ObservedObject var storesSource: StoresSource
-	@State var storesSource: StoresSource?
+	var storesSource: StoresSource?
 	
 	var body: some View {
 		VStack {
@@ -41,10 +65,6 @@ struct StoresView: View {
 			} else {
 				Text("You must set up your AWS credentials first")
 			}
-		}
-		.onAppear { settings.load() }
-		.onReceive(settings.$awsCredentials) { (awsCredentials) in
-			storesSource = .init(awsCredentials: awsCredentials)
 		}
 	}
 }
@@ -235,7 +255,7 @@ struct ObjectInfoView: View {
 		if
 			case let .success(output) = objectSource.getResult,
 			let mediaType = output.contentType,
-			let contentData = output.body
+			let contentData = output.body?.asData()
 		{
 			return AnyView(
 				VStack {

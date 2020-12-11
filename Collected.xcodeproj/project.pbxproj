@@ -12,6 +12,13 @@
 		B282A63A253EBE5A003B865C /* ContentRepo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B282A639253EBE5A003B865C /* ContentRepo.swift */; };
 		B29517142532BA2400B472A1 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29517132532BA2400B472A1 /* Settings.swift */; };
 		B295171C2532DA2100B472A1 /* Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295171B2532DA2100B472A1 /* Content.swift */; };
+		B2D7AFEB2583B437001E73B4 /* SotoSNS in Frameworks */ = {isa = PBXBuildFile; productRef = B2D7AFEA2583B437001E73B4 /* SotoSNS */; };
+		B2D7AFED2583B437001E73B4 /* SotoDynamoDB in Frameworks */ = {isa = PBXBuildFile; productRef = B2D7AFEC2583B437001E73B4 /* SotoDynamoDB */; };
+		B2D7AFEF2583B437001E73B4 /* SotoIAM in Frameworks */ = {isa = PBXBuildFile; productRef = B2D7AFEE2583B437001E73B4 /* SotoIAM */; };
+		B2D7AFF12583B437001E73B4 /* SotoLambda in Frameworks */ = {isa = PBXBuildFile; productRef = B2D7AFF02583B437001E73B4 /* SotoLambda */; };
+		B2D7AFF32583B437001E73B4 /* SotoSQS in Frameworks */ = {isa = PBXBuildFile; productRef = B2D7AFF22583B437001E73B4 /* SotoSQS */; };
+		B2D7AFF52583B437001E73B4 /* SotoLightsail in Frameworks */ = {isa = PBXBuildFile; productRef = B2D7AFF42583B437001E73B4 /* SotoLightsail */; };
+		B2D7AFF72583B437001E73B4 /* SotoS3 in Frameworks */ = {isa = PBXBuildFile; productRef = B2D7AFF62583B437001E73B4 /* SotoS3 */; };
 		B2FA9CB925077C4500C32EEC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CB825077C4500C32EEC /* AppDelegate.swift */; };
 		B2FA9CBB25077C4500C32EEC /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CBA25077C4500C32EEC /* SceneDelegate.swift */; };
 		B2FA9CBD25077C4500C32EEC /* FirstViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CBC25077C4500C32EEC /* FirstViewController.swift */; };
@@ -21,13 +28,6 @@
 		B2FA9CC725077C4900C32EEC /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = B2FA9CC525077C4900C32EEC /* LaunchScreen.storyboard */; };
 		B2FA9CD225077C4900C32EEC /* CollectedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CD125077C4900C32EEC /* CollectedTests.swift */; };
 		B2FA9CDD25077C4900C32EEC /* CollectedUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CDC25077C4900C32EEC /* CollectedUITests.swift */; };
-		B2FA9CED2508D53F00C32EEC /* DynamoDB in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CEC2508D53F00C32EEC /* DynamoDB */; };
-		B2FA9CEF2508D53F00C32EEC /* IAM in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CEE2508D53F00C32EEC /* IAM */; };
-		B2FA9CF12508D53F00C32EEC /* APIGateway in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CF02508D53F00C32EEC /* APIGateway */; };
-		B2FA9CF32508D53F00C32EEC /* SNS in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CF22508D53F00C32EEC /* SNS */; };
-		B2FA9CF52508D53F00C32EEC /* SQS in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CF42508D53F00C32EEC /* SQS */; };
-		B2FA9CF72508D53F00C32EEC /* S3 in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CF62508D53F00C32EEC /* S3 */; };
-		B2FA9CF92508D53F00C32EEC /* Lambda in Frameworks */ = {isa = PBXBuildFile; productRef = B2FA9CF82508D53F00C32EEC /* Lambda */; };
 		B2FA9CFB250A4D9F00C32EEC /* NIO+Combine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CFA250A4D9F00C32EEC /* NIO+Combine.swift */; };
 		B2FA9CFD250B4A5500C32EEC /* ContentPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FA9CFC250B4A5500C32EEC /* ContentPreview.swift */; };
 /* End PBXBuildFile section */
@@ -80,13 +80,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B2FA9CF72508D53F00C32EEC /* S3 in Frameworks */,
-				B2FA9CF12508D53F00C32EEC /* APIGateway in Frameworks */,
-				B2FA9CF92508D53F00C32EEC /* Lambda in Frameworks */,
-				B2FA9CEF2508D53F00C32EEC /* IAM in Frameworks */,
-				B2FA9CED2508D53F00C32EEC /* DynamoDB in Frameworks */,
-				B2FA9CF32508D53F00C32EEC /* SNS in Frameworks */,
-				B2FA9CF52508D53F00C32EEC /* SQS in Frameworks */,
+				B2D7AFF32583B437001E73B4 /* SotoSQS in Frameworks */,
+				B2D7AFF52583B437001E73B4 /* SotoLightsail in Frameworks */,
+				B2D7AFF12583B437001E73B4 /* SotoLambda in Frameworks */,
+				B2D7AFEF2583B437001E73B4 /* SotoIAM in Frameworks */,
+				B2D7AFEB2583B437001E73B4 /* SotoSNS in Frameworks */,
+				B2D7AFF72583B437001E73B4 /* SotoS3 in Frameworks */,
+				B2D7AFED2583B437001E73B4 /* SotoDynamoDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -185,13 +185,13 @@
 			);
 			name = Collected;
 			packageProductDependencies = (
-				B2FA9CEC2508D53F00C32EEC /* DynamoDB */,
-				B2FA9CEE2508D53F00C32EEC /* IAM */,
-				B2FA9CF02508D53F00C32EEC /* APIGateway */,
-				B2FA9CF22508D53F00C32EEC /* SNS */,
-				B2FA9CF42508D53F00C32EEC /* SQS */,
-				B2FA9CF62508D53F00C32EEC /* S3 */,
-				B2FA9CF82508D53F00C32EEC /* Lambda */,
+				B2D7AFEA2583B437001E73B4 /* SotoSNS */,
+				B2D7AFEC2583B437001E73B4 /* SotoDynamoDB */,
+				B2D7AFEE2583B437001E73B4 /* SotoIAM */,
+				B2D7AFF02583B437001E73B4 /* SotoLambda */,
+				B2D7AFF22583B437001E73B4 /* SotoSQS */,
+				B2D7AFF42583B437001E73B4 /* SotoLightsail */,
+				B2D7AFF62583B437001E73B4 /* SotoS3 */,
 			);
 			productName = Collected;
 			productReference = B2FA9CB525077C4500C32EEC /* Collected.app */;
@@ -266,7 +266,7 @@
 			);
 			mainGroup = B2FA9CAC25077C4400C32EEC;
 			packageReferences = (
-				B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */,
+				B2D7AFE92583B437001E73B4 /* XCRemoteSwiftPackageReference "soto" */,
 			);
 			productRefGroup = B2FA9CB625077C4500C32EEC /* Products */;
 			projectDirPath = "";
@@ -660,51 +660,51 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */ = {
+		B2D7AFE92583B437001E73B4 /* XCRemoteSwiftPackageReference "soto" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/swift-aws/aws-sdk-swift.git";
+			repositoryURL = "https://github.com/soto-project/soto.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 4.8.0;
+				minimumVersion = 5.0.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		B2FA9CEC2508D53F00C32EEC /* DynamoDB */ = {
+		B2D7AFEA2583B437001E73B4 /* SotoSNS */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
-			productName = DynamoDB;
+			package = B2D7AFE92583B437001E73B4 /* XCRemoteSwiftPackageReference "soto" */;
+			productName = SotoSNS;
 		};
-		B2FA9CEE2508D53F00C32EEC /* IAM */ = {
+		B2D7AFEC2583B437001E73B4 /* SotoDynamoDB */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
-			productName = IAM;
+			package = B2D7AFE92583B437001E73B4 /* XCRemoteSwiftPackageReference "soto" */;
+			productName = SotoDynamoDB;
 		};
-		B2FA9CF02508D53F00C32EEC /* APIGateway */ = {
+		B2D7AFEE2583B437001E73B4 /* SotoIAM */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
-			productName = APIGateway;
+			package = B2D7AFE92583B437001E73B4 /* XCRemoteSwiftPackageReference "soto" */;
+			productName = SotoIAM;
 		};
-		B2FA9CF22508D53F00C32EEC /* SNS */ = {
+		B2D7AFF02583B437001E73B4 /* SotoLambda */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
-			productName = SNS;
+			package = B2D7AFE92583B437001E73B4 /* XCRemoteSwiftPackageReference "soto" */;
+			productName = SotoLambda;
 		};
-		B2FA9CF42508D53F00C32EEC /* SQS */ = {
+		B2D7AFF22583B437001E73B4 /* SotoSQS */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
-			productName = SQS;
+			package = B2D7AFE92583B437001E73B4 /* XCRemoteSwiftPackageReference "soto" */;
+			productName = SotoSQS;
 		};
-		B2FA9CF62508D53F00C32EEC /* S3 */ = {
+		B2D7AFF42583B437001E73B4 /* SotoLightsail */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
-			productName = S3;
+			package = B2D7AFE92583B437001E73B4 /* XCRemoteSwiftPackageReference "soto" */;
+			productName = SotoLightsail;
 		};
-		B2FA9CF82508D53F00C32EEC /* Lambda */ = {
+		B2D7AFF62583B437001E73B4 /* SotoS3 */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B2FA9CEB2508D53F00C32EEC /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
-			productName = Lambda;
+			package = B2D7AFE92583B437001E73B4 /* XCRemoteSwiftPackageReference "soto" */;
+			productName = SotoS3;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
