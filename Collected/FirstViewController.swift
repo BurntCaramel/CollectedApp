@@ -271,7 +271,6 @@ struct ObjectInfoView: View {
 	
 	var body: some View {
 		return VStack {
-			Text(objectSource.objectKey)
 			Button(action: load) { Text("Load") }
 			
 			VStack {

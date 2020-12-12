@@ -45,13 +45,46 @@ enum ContentPreview {
 	private struct ImagePreview: View {
 		var contentData: Data
 		
-		var uiImage: UIImage? {
-			UIImage(data: contentData)
+		struct DecodedImage {
+			var uiImage: UIImage
+			private var propertiesRaw: CFDictionary?
+			private var properties: NSDictionary? { propertiesRaw }
+			
+			var pixelWidth: CGFloat? {
+				properties?.value(forKey: kCGImagePropertyPixelWidth as String) as? CGFloat
+			}
+			var pixelHeight: CGFloat? {
+				properties?.value(forKey: kCGImagePropertyPixelHeight as String) as? CGFloat
+			}
+			
+			init?(data: Data) {
+				guard let imageSource = CGImageSourceCreateWithData(data as NSData, nil) else { return nil }
+				let index = CGImageSourceGetPrimaryImageIndex(imageSource)
+				self.propertiesRaw = CGImageSourceCopyPropertiesAtIndex(imageSource, index, nil)
+				guard let cgImage = CGImageSourceCreateImageAtIndex(imageSource, index, nil) else { return nil }
+				self.uiImage = UIImage(cgImage: cgImage)
+			}
+		}
+		
+		var decodedImage: DecodedImage? {
+			return DecodedImage(data: contentData)
 		}
 		
 		var body: some View {
-			if let uiImage = uiImage {
-				Image(uiImage: uiImage)
+			if let decodedImage = decodedImage {
+				VStack {
+					HStack {
+						if let pixelWidth = decodedImage.pixelWidth {
+							Text("Width: \(pixelWidth, specifier: "%.0f")")
+						}
+						if let pixelHeight = decodedImage.pixelHeight {
+							Text("Height: \(pixelHeight, specifier: "%.0f")")
+						}
+					}
+					Image(uiImage: decodedImage.uiImage)
+						.resizable()
+						.aspectRatio(contentMode: .fit)
+				}
 			} else {
 				Text("Can’t preview image")
 			}
