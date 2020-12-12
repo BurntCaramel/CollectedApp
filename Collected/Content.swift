@@ -59,7 +59,7 @@ enum MediaType : Hashable {
 	case other(baseType: Base, subType: String)
 	case unknown(raw: String)
 	
-	init(string: String) {
+	init<S>(string: S) where S: StringProtocol {
 		let components = string.split(separator: "/", maxSplits: 1)
 		let baseRaw = String(components[0])
 		let subtypeRaw = String(components[1])
@@ -77,12 +77,18 @@ enum MediaType : Hashable {
 				} else {
 					self = .other(baseType: .image, subType: subtypeRaw)
 				}
+			case .application:
+				if let applicationType = Application(rawValue: subtypeRaw) {
+					self = .application(applicationType)
+				} else {
+					self = .other(baseType: .application, subType: subtypeRaw)
+				}
 			default:
 				// TODO: Other cases
-				self = .unknown(raw: string)
+				self = .unknown(raw: String(string))
 			}
 		} else {
-			self = .unknown(raw: string)
+			self = .unknown(raw: String(string))
 		}
 	}
 	
@@ -139,10 +145,33 @@ enum MediaType : Hashable {
 
 struct ContentIdentifier: Hashable {
 	var mediaType: MediaType
-	var sha256Digest: SHA256Digest
+	var sha256DigestHex: String
+	var objectStorageKey: String { "sha256/\(mediaType.string)/\(sha256DigestHex)" }
+}
+
+extension ContentIdentifier {
+	init(mediaType: MediaType, sha256Digest: SHA256Digest) {
+		self.init(mediaType: mediaType, sha256DigestHex: sha256Digest.map { String(format: "%02x", $0) }.joined())
+	}
 	
-	var digestHex: String { sha256Digest.map { String(format: "%02x", $0) }.joined() }
-	var objectStorageKey: String { "sha256/\(mediaType.string)/\(digestHex)" }
+	init?(objectStorageKey: String) {
+		let components = objectStorageKey.split(separator: "/")
+		guard components.count == 4 else { return nil }
+		guard components[0] == "sha256" else { return nil }
+		
+		let rawMediaType = objectStorageKey[components[1].startIndex ..< components[2].endIndex]
+		self.mediaType = MediaType(string: rawMediaType)
+		
+		let hexEncoded = components[3]
+		self.sha256DigestHex = String(hexEncoded)
+//		let bytes = stride(from: 0, to: hexEncoded.count, by: 2)
+//			.compactMap { offset in
+//				let index = hexEncoded.index(hexEncoded.startIndex, offsetBy: offset)
+//				let nextIndex = hexEncoded.index(after: index)
+//				UInt8(hexEncoded[index ..< nextIndex])
+//				//hexEncoded[hexEncoded.$0]
+//			}
+	}
 }
 
 struct ContentResource : Identifiable {

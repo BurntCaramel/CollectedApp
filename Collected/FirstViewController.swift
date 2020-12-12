@@ -131,7 +131,7 @@ struct BucketView: View {
 		func performDrop(info: DropInfo) -> Bool {
 			var count = 0
 			
-			for mediaType in [MediaType.text(.plain), .image(.png), .application(.pdf)] {
+			for mediaType in [MediaType.text(.plain), .text(.markdown), .image(.png), .image(.gif), .image(.jpeg), .image(.tiff), .application(.pdf)] {
 				let uti = mediaType.uti!
 				let itemProviders = info.itemProviders(for: [uti])
 				for item in itemProviders {
@@ -190,6 +190,104 @@ struct BucketView: View {
 		}
 	}
 	
+	struct DigestEmojidView: View {
+		var digestHex: String
+		
+		let hexToEmoji: Dictionary<Character, String> = [
+			"0": "⚡️", "1": "💩", "2": "💋", "3": "🦁", "4": "🐧", "5": "🦄", "6": "🐝", "7": "🐙", "8": "🌵", "9": "🍇", "a": "🍫", "b": "🎈", "c": "⛄", "d": "⛵️", "e": "🚲", "f": "👠"
+		]
+		
+		var emojid: [String]? {
+			let emojis = digestHex.prefix(7).compactMap{ hexToEmoji[$0] }
+			guard emojis.count == 7 else { return nil }
+			return emojis
+		}
+		
+		var body: some View {
+			if let emojid = emojid {
+				HStack(alignment: /*@START_MENU_TOKEN@*/.center/*@END_MENU_TOKEN@*/, spacing: nil) {
+					ForEach(emojid.indices) { index in
+						Text(emojid[index]).font(index <= 3 ? .title2 : .body)
+					}
+				}
+//				Text(emojid).font(.body).help(digestHex)
+			} else {
+				Text(digestHex).font(.caption)
+			}
+		}
+	}
+	
+	struct DigestSymbolView: View {
+		var digestHex: String
+		
+		let hexToSystemName: Dictionary<Character, String> = [
+			"0": "suit.club.fill", "1": "suit.diamond.fill", "2": "heart.circle.fill", "3": "cursorarrow.rays", "4": "arrow.up.arrow.down.square.fill", "5": "bell.fill", "6": "eyebrow", "7": "flashlight.on.fill", "8": "line.3.crossed.swirl.circle", "9": "scissors", "a": "gyroscope", "b": "paintbrush.pointed.fill", "c": "key.fill", "d": "pin.circle.fill", "e": "bicycle", "f": "checkerboard.rectangle"
+		]
+		
+		let hexToColor: Dictionary<Character, SwiftUI.Color> = [
+			"0": Color.black, "1": .blue, "2": .orange, "3": .yellow, "4": .red, "5": .purple, "6": .pink, "7": .green, "8": .gray, "9": .red, "a": .blue, "b": .purple, "c": .orange, "d": .green, "e": .pink, "f": .black
+		]
+		
+		let count = 5
+		
+		var symbols: [String]? {
+			let symbols = digestHex.prefix(count).compactMap{ hexToSystemName[$0] }
+			guard symbols.count == count else { return nil }
+			return symbols
+		}
+		
+		var colors: [Color]? {
+			let colors = digestHex.dropFirst(count).prefix(count).compactMap{ hexToColor[$0] }
+			guard colors.count == count else { return nil }
+			return colors
+		}
+		
+		var body: some View {
+			if let symbols = symbols, let colors = colors {
+				HStack(alignment: /*@START_MENU_TOKEN@*/.center/*@END_MENU_TOKEN@*/, spacing: nil) {
+					ForEach(symbols.indices) { index in
+						Image(systemName: symbols[index]).font(index % 2 == 0 ? .title : .body).foregroundColor(colors[index])
+					}
+				}
+			} else {
+				Text(digestHex).font(.caption)
+			}
+		}
+	}
+	
+	struct ItemView: View {
+		var key: String
+		
+		var body: some View {
+			if let contentIdentifier = ContentIdentifier(objectStorageKey: key) {
+				switch contentIdentifier.mediaType {
+				case .text(let textType):
+					HStack {
+						Image(systemName: "doc.plaintext")
+						Text(textType.rawValue).textCase(.uppercase).font(.caption)
+						DigestSymbolView(digestHex: contentIdentifier.sha256DigestHex)
+					}
+				case .image(let imageType):
+					HStack {
+						Image(systemName: "photo")
+						Text(imageType.rawValue).textCase(.uppercase).font(.caption)
+						DigestSymbolView(digestHex: contentIdentifier.sha256DigestHex)
+					}
+				case .application(.pdf):
+					HStack {
+						Image(systemName: "doc.richtext")
+						Text("pdf").textCase(.uppercase).font(.caption)
+						DigestSymbolView(digestHex: contentIdentifier.sha256DigestHex)
+					}
+				default:
+					Text(key)
+				}
+			} else {
+				Text(key)
+			}
+		}
+	}
+	
 	var body: some View {
 		VStack {
 			Text("Load #\(bucketSource.loadClock.counter)")
@@ -215,7 +313,7 @@ struct BucketView: View {
 				ForEach(objects, id: \.key) { object in
 					NavigationLink(destination: ObjectInfoView(object: object, objectSource: bucketSource.useObject(key: object.key ?? ""))) {
 						HStack {
-							Text(object.key ?? "")
+							ItemView(key: object.key ?? "")
 								.contextMenu {
 									Button("Delete") {
 										if let key = object.key {
