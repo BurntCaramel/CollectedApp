@@ -109,7 +109,7 @@ struct BucketView: View {
 		case pdf
 	}
 	
-	@State var filter: Filter = .all
+	@State var filter: Filter = .image
 	
 	struct NewState {
 		var key = ""
@@ -155,26 +155,11 @@ struct BucketView: View {
 	
 	private var newFormView: some View {
 		VStack {
-			Form {
-				TextField("Key", text: $newState.key)
-				Picker("Media Type", selection: $newState.mediaType) {
-					Text("Plain text").tag(MediaType.text(.plain))
-					Text("Markdown").tag(MediaType.text(.markdown))
-					Text("JSON").tag(MediaType.text(.json))
-				}
-				TextField("Content", text: $newState.stringContent)
-					.lineLimit(6)
-				Button("Create") {
-					if let content = newState.content {
-						bucketSource.create(content: content)
-					}
-				}
-			}
-			
-			Text("Drop to upload")
+			Text("Drop file to upload").padding()
 		}
-		.background(isDropActive ? Color.red : Color.blue)
-		.onDrop(of: [UTType.text, UTType.pdf], delegate: Drop(bucketSource: bucketSource))
+		.foregroundColor(.white)
+		.background(isDropActive ? Color.purple : Color.blue)
+		.onDrop(of: [UTType.text, UTType.image, UTType.pdf], delegate: Drop(bucketSource: bucketSource))
 	}
 	
 	var objects: [S3.Object] {
@@ -304,10 +289,10 @@ struct BucketView: View {
 			}
 			
 			Picker("Filter", selection: $filter) {
-				Text("All").tag(Filter.all)
-				Text("Texts").tag(Filter.text)
 				Text("Images").tag(Filter.image)
+				Text("Texts").tag(Filter.text)
 				Text("PDFs").tag(Filter.pdf)
+				Text("All").tag(Filter.all)
 			}.pickerStyle(SegmentedPickerStyle())
 			List {
 				ForEach(objects, id: \.key) { object in

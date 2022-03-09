@@ -31,14 +31,19 @@ enum ContentPreview {
 	private struct TextPreview: View {
 		var contentData: Data
 		
+		@State var text = "hello"
+		
 		var contentString: String? {
 			String(data: contentData, encoding: .utf8)
 		}
 		
 		var body: some View {
-			Text(contentString ?? "")
-				.frame(maxWidth: .infinity)
-				.border(Color.gray)
+//			TextEditor(text: $text)
+			ScrollView {
+				Text(contentString ?? "")
+					.frame(maxWidth: .infinity)
+			}
+			.border(Color.gray)
 		}
 	}
 	
@@ -50,6 +55,7 @@ enum ContentPreview {
 			private var propertiesRaw: CFDictionary?
 			private var properties: NSDictionary? { propertiesRaw }
 			
+			var imageCount: Int
 			var pixelWidth: CGFloat? {
 				properties?.value(forKey: kCGImagePropertyPixelWidth as String) as? CGFloat
 			}
@@ -60,6 +66,12 @@ enum ContentPreview {
 			init?(data: Data) {
 				guard let imageSource = CGImageSourceCreateWithData(data as NSData, nil) else { return nil }
 				let index = CGImageSourceGetPrimaryImageIndex(imageSource)
+				
+				let basePropertiesRaw = CGImageSourceCopyProperties(imageSource, nil)
+				print("Properties", basePropertiesRaw as Any)
+				
+				self.imageCount = CGImageSourceGetCount(imageSource)
+				
 				self.propertiesRaw = CGImageSourceCopyPropertiesAtIndex(imageSource, index, nil)
 				guard let cgImage = CGImageSourceCreateImageAtIndex(imageSource, index, nil) else { return nil }
 				self.uiImage = UIImage(cgImage: cgImage)
@@ -74,13 +86,18 @@ enum ContentPreview {
 			if let decodedImage = decodedImage {
 				VStack {
 					HStack {
+						Text("Images: \(decodedImage.imageCount)")
+						
 						if let pixelWidth = decodedImage.pixelWidth {
 							Text("Width: \(pixelWidth, specifier: "%.0f")")
 						}
+						
 						if let pixelHeight = decodedImage.pixelHeight {
 							Text("Height: \(pixelHeight, specifier: "%.0f")")
 						}
 					}
+					.font(.caption)
+					
 					Image(uiImage: decodedImage.uiImage)
 						.resizable()
 						.aspectRatio(contentMode: .fit)
