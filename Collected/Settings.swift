@@ -17,7 +17,7 @@ enum Settings {
         }
         var secretAccessKey: String {
             didSet {
-                accessKeyID = accessKeyID.trimmingCharacters(in: .whitespaces)
+                secretAccessKey = secretAccessKey.trimmingCharacters(in: .whitespaces)
             }
         }
 		var region: String

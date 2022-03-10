@@ -21,6 +21,8 @@ enum ContentPreview {
 					TextPreview(contentData: contentData)
 				case .image:
 					ImagePreview(contentData: contentData)
+                case .application(.json), .application(.javascript):
+                    TextPreview(contentData: contentData)
 				default:
 					Text("Can’t preview \(mediaType.string)")
 				}

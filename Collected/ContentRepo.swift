@@ -57,6 +57,7 @@ class S3Source : ObservableObject {
 		
 		private func listBuckets() -> AnyPublisher<[S3.Bucket], Error> {
 			return Deferred { s3.listBuckets() }
+                .print()
 				.map({ $0.buckets?.compactMap({ $0 }) ?? [] })
 				.receive(on: DispatchQueue.main)
 				.eraseToAnyPublisher()
@@ -94,6 +95,10 @@ extension StoresSource {
 class BucketSource : ObservableObject {
 	let bucketName: String
 	private let s3: S3
+    
+    var collectedPressRootURL: URL? {
+        URL(string: "https://collected.press/1/s3/object/\(s3.region.rawValue)/\(bucketName)/")
+    }
 	
 	fileprivate struct Producers {
 		let bucketName: String
@@ -128,11 +133,11 @@ class BucketSource : ObservableObject {
 		}
 		
 		private func list(filter: ListFilter) -> AnyPublisher<[S3.Object], Never> {
-			return Deferred { s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix)) }
-			.map({ $0.contents?.compactMap({ $0 }) ?? [] })
-			.replaceError(with: [])
-			.receive(on: DispatchQueue.main)
-			.eraseToAnyPublisher()
+            return Deferred { s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix)) }
+            .map({ $0.contents?.compactMap({ $0 }) ?? [] })
+            .replaceError(with: [])
+            .receive(on: DispatchQueue.main)
+            .eraseToAnyPublisher()
 		}
 		
 		func list<P : Publisher>(clock: P, filter: ListFilter) -> AnyPublisher<[S3.Object], Never> where P.Failure == Never {
@@ -142,12 +147,12 @@ class BucketSource : ObservableObject {
 				.eraseToAnyPublisher()
 		}
 		
-		func create(content: ContentResource) -> AnyPublisher<S3.PutObjectOutput, Error> {
+		func createPublicReadable(content: ContentResource) -> AnyPublisher<S3.PutObjectOutput, Error> {
 			let contentID = content.id
 			let key = contentID.objectStorageKey
 			print("PUT OBJECT: KEY", key)
 			
-			let request = S3.PutObjectRequest(body: AWSPayload.data(content.data), bucket: bucketName, contentType: contentID.mediaType.string, key: key)
+            let request = S3.PutObjectRequest(acl: .publicRead, body: AWSPayload.data(content.data), bucket: bucketName, contentType: contentID.mediaType.string, key: key)
 			return Deferred { s3.putObject(request) }
 				.print()
 				.receive(on: DispatchQueue.main)
@@ -156,12 +161,15 @@ class BucketSource : ObservableObject {
 		
 		func makePublicReadable(contentID: ContentIdentifier) -> AnyPublisher<S3.PutObjectAclOutput, Error> {
 			let key = contentID.objectStorageKey
-			
-			let request = S3.PutObjectAclRequest(acl: .publicRead, bucket: bucketName, key: key)
-			return Deferred { s3.putObjectAcl(request) }
-				.receive(on: DispatchQueue.main)
-				.eraseToAnyPublisher()
+            return makePublicReadable(key: key)
 		}
+        
+        func makePublicReadable(key: String) -> AnyPublisher<S3.PutObjectAclOutput, Error> {
+            let request = S3.PutObjectAclRequest(acl: .publicRead, bucket: bucketName, key: key)
+            return Deferred { s3.putObjectAcl(request) }
+                .receive(on: DispatchQueue.main)
+                .eraseToAnyPublisher()
+        }
 		
 		func delete(key: String) -> AnyPublisher<S3.DeleteObjectOutput, Error> {
 			return Deferred { s3.deleteObject(.init(bucket: bucketName, key: key)) }
@@ -223,20 +231,34 @@ class BucketSource : ObservableObject {
 	}
 	
 	var createCancellables = Set<AnyCancellable>()
+    var changeCancellables = Set<AnyCancellable>()
 	var deleteCancellables = Set<AnyCancellable>()
 	
-	func create(content: ContentResource) {
-		producers.create(content: content)
+	func createPublicReadable(content: ContentResource) {
+		producers.createPublicReadable(content: content)
 			.sink { [self] completion in
 				switch completion {
 				case .finished:
 					self.load()
 				case let .failure(error):
-					print("ERror creating", error)
+					print("Error creating", error)
 				}
 			} receiveValue: { _ in }
 			.store(in: &createCancellables)
 	}
+    
+    func makePublicReadable(key: String) {
+        producers.makePublicReadable(key: key)
+            .sink { [self] completion in
+                switch completion {
+                case .finished:
+                    self.load()
+                case let .failure(error):
+                    print("Error make public read", error)
+                }
+            } receiveValue: { _ in }
+            .store(in: &changeCancellables)
+    }
 	
 	func delete(key: String) {
 		producers.delete(key: key)
@@ -329,6 +351,10 @@ class S3ObjectSource : ObservableObject {
 	}
 	
 	var objectKey: String { producers.objectKey }
+    
+    var collectedPressURL: URL? {
+        URL(string: "https://collected.press/1/s3/object/\(producers.s3.region.rawValue)/\(producers.bucketName)/\(producers.objectKey)")
+    }
 	
 	@Published var getResult: Result<S3.GetObjectOutput, Error>?
 	

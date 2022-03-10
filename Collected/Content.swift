@@ -188,7 +188,11 @@ struct ContentResource : Identifiable {
 
 extension ContentResource {
 	init?(textType: MediaType.Text, string: String) {
-		guard let data = string.data(using: .utf8) else { return nil }
-		self.init(data: data, mediaType: .text(textType))
+        self.init(mediaType: .text(textType), string: string)
 	}
+    
+    init?(mediaType: MediaType, string: String) {
+        guard let data = string.data(using: .utf8) else { return nil }
+        self.init(data: data, mediaType: mediaType)
+    }
 }

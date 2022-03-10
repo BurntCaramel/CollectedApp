@@ -84,14 +84,24 @@ struct ListStoresView: View {
 	
 	var body: some View {
 		NavigationView {
-			List {
-				ForEach(bucketNames, id: \.self) { bucketName in
-					NavigationLink(destination: BucketView(bucketSource: bucketsSource.bucket(name: bucketName))) {
-						Text(bucketName)
-					}
-				}
-			}
-			.navigationBarTitle("Buckets")
+            switch bucketsSource.bucketsResult {
+            case .none:
+                Text("Loading…")
+                    .navigationBarTitle("Buckets")
+            case .some(.failure(let error)):
+                Text("Error: \(error.localizedDescription)")
+                    .navigationBarTitle("Buckets")
+            case .some(.success(let buckets)):
+                let bucketNames = buckets.compactMap({ $0.name })
+                List {
+                    ForEach(bucketNames, id: \.self) { bucketName in
+                        NavigationLink(destination: BucketView(bucketSource: bucketsSource.bucket(name: bucketName))) {
+                            Text(bucketName)
+                        }
+                    }
+                }
+                .navigationBarTitle("Buckets")
+            }
 		}
 		.onAppear {
 			self.bucketsSource.load()
@@ -112,12 +122,11 @@ struct BucketView: View {
 	@State var filter: Filter = .image
 	
 	struct NewState {
-		var key = ""
 		var mediaType = MediaType.text(.markdown)
 		var stringContent = ""
 		
 		var content: ContentResource? {
-			ContentResource(textType: .plain, string: stringContent)
+            ContentResource(mediaType: mediaType, string: stringContent)
 		}
 	}
 	@State var newState = NewState()
@@ -131,7 +140,7 @@ struct BucketView: View {
 		func performDrop(info: DropInfo) -> Bool {
 			var count = 0
 			
-			for mediaType in [MediaType.text(.plain), .text(.markdown), .image(.png), .image(.gif), .image(.jpeg), .image(.tiff), .application(.pdf)] {
+            for mediaType in [MediaType.text(.plain), .text(.markdown), .image(.png), .image(.gif), .image(.jpeg), .image(.tiff), .application(.pdf), .application(.json)] {
 				let uti = mediaType.uti!
 				let itemProviders = info.itemProviders(for: [uti])
 				for item in itemProviders {
@@ -142,7 +151,7 @@ struct BucketView: View {
 						if let data = data {
 							print("RECEIVED DATA", data)
 							let content = ContentResource(data: data, mediaType: mediaType)
-							bucketSource.create(content: content)
+							bucketSource.createPublicReadable(content: content)
 							count += 1
 						}
 					})
@@ -155,11 +164,38 @@ struct BucketView: View {
 	
 	private var newFormView: some View {
 		VStack {
-			Text("Drop file to upload").padding()
+            Group {
+                Text("Drop file to upload").padding()
+            }
+            .foregroundColor(.white)
+            .background(isDropActive ? Color.purple : Color.blue)
+            .onDrop(of: [UTType.text, UTType.image, UTType.pdf], delegate: Drop(bucketSource: bucketSource))
+            
+            Form {
+                TextEditor(text: $newState.stringContent)
+                    .border(.gray, width: 1)
+                
+                Picker("Content Type", selection: $newState.mediaType) {
+                    Text("Markdown").tag(MediaType.text(.markdown))
+                    Text("Plain text").tag(MediaType.text(.plain))
+                    Text("JSON").tag(MediaType.application(.json))
+                    Text("JavaScript").tag(MediaType.application(.javascript))
+                }.pickerStyle(.menu)
+                
+                if let content = newState.content {
+                    Text(content.id.objectStorageKey)
+                        .onTapGesture {
+                            if let collectedPressURL = bucketSource.collectedPressRootURL?.appendingPathComponent(content.id.objectStorageKey) {
+                                UIPasteboard.general.url = collectedPressURL
+                            }
+                        }
+                    
+                    Button("Create") {
+                        bucketSource.createPublicReadable(content: content)
+                    }
+                }
+            }
 		}
-		.foregroundColor(.white)
-		.background(isDropActive ? Color.purple : Color.blue)
-		.onDrop(of: [UTType.text, UTType.image, UTType.pdf], delegate: Drop(bucketSource: bucketSource))
 	}
 	
 	var objects: [S3.Object] {
@@ -241,32 +277,29 @@ struct BucketView: View {
 	}
 	
 	struct ItemView: View {
-		var key: String
+		let key: String
+        
+        var contentIdentifier: ContentIdentifier? { .init(objectStorageKey: key) }
+        
+        var values: Optional<(imageName: String, text: String, contentIdentifier: ContentIdentifier)> {
+            guard let contentIdentifier = contentIdentifier else { return nil }
+            switch contentIdentifier.mediaType {
+            case .text(let textType): return (imageName: "doc.plaintext", text: textType.rawValue, contentIdentifier: contentIdentifier)
+            case .image(let imageType): return (imageName: "photo", text: imageType.rawValue, contentIdentifier: contentIdentifier)
+            case .application(.pdf): return (imageName: "doc.richtext", text: "pdf", contentIdentifier: contentIdentifier)
+            case .application(.javascript): return (imageName: "curlybraces.square", text: "javascript", contentIdentifier: contentIdentifier)
+            case .application(.json): return (imageName: "curlybraces.square", text: "json", contentIdentifier: contentIdentifier)
+            default: return nil
+            }
+        }
 		
 		var body: some View {
-			if let contentIdentifier = ContentIdentifier(objectStorageKey: key) {
-				switch contentIdentifier.mediaType {
-				case .text(let textType):
-					HStack {
-						Image(systemName: "doc.plaintext")
-						Text(textType.rawValue).textCase(.uppercase).font(.caption)
-						DigestSymbolView(digestHex: contentIdentifier.sha256DigestHex)
-					}
-				case .image(let imageType):
-					HStack {
-						Image(systemName: "photo")
-						Text(imageType.rawValue).textCase(.uppercase).font(.caption)
-						DigestSymbolView(digestHex: contentIdentifier.sha256DigestHex)
-					}
-				case .application(.pdf):
-					HStack {
-						Image(systemName: "doc.richtext")
-						Text("pdf").textCase(.uppercase).font(.caption)
-						DigestSymbolView(digestHex: contentIdentifier.sha256DigestHex)
-					}
-				default:
-					Text(key)
-				}
+            if let values = self.values {
+                HStack {
+                    Image(systemName: values.imageName)
+                    Text(values.text).textCase(.uppercase).font(.body)
+                    DigestSymbolView(digestHex: values.contentIdentifier.sha256DigestHex)
+                }
 			} else {
 				Text(key)
 			}
@@ -293,13 +326,18 @@ struct BucketView: View {
 				Text("Texts").tag(Filter.text)
 				Text("PDFs").tag(Filter.pdf)
 				Text("All").tag(Filter.all)
-			}.pickerStyle(SegmentedPickerStyle())
+            }.pickerStyle(.segmented)
 			List {
 				ForEach(objects, id: \.key) { object in
 					NavigationLink(destination: ObjectInfoView(object: object, objectSource: bucketSource.useObject(key: object.key ?? ""))) {
 						HStack {
 							ItemView(key: object.key ?? "")
 								.contextMenu {
+                                    Button("Make Public Readable") {
+                                        if let key = object.key {
+                                            bucketSource.makePublicReadable(key: key)
+                                        }
+                                    }
 									Button("Delete") {
 										if let key = object.key {
 											print("DELETE!", key)
@@ -355,6 +393,14 @@ struct ObjectInfoView: View {
 	var body: some View {
 		return VStack {
 			Button(action: load) { Text("Load") }
+            
+            if let collectedPressURL = objectSource.collectedPressURL {
+                Text(collectedPressURL.absoluteString)
+                    .textSelection(.enabled)
+                    .onTapGesture {
+                        UIPasteboard.general.url = collectedPressURL
+                    }
+            }
 			
 			VStack {
 				self.previewView
