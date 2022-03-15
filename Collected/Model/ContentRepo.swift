@@ -37,9 +37,17 @@ class StoresSource: ObservableObject {
 	init(awsCredentials: Settings.AWSCredentials) {
 		awsClient = AWSClient(credentialProvider: .static(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey), httpClientProvider: .createNew)
 		//let awsClient = AWSClient(credentialProvider: .static(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey))
-		s3 = S3(client: awsClient, region: .uswest2)
+		s3 = S3(client: awsClient, region: .useast1)
 		//s3 = .init(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey, region: .uswest2)
 		//		s3 = .init(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey, region: .useast1)
+	}
+	
+	func s3(region: Region) -> S3 {
+		return S3(client: awsClient, region: region)
+	}
+	
+	func listS3Buckets() async throws -> [S3.Bucket] {
+		try await s3.listBuckets().buckets ?? []
 	}
 	
 	func shutdown() {
@@ -47,58 +55,13 @@ class StoresSource: ObservableObject {
 	}
 }
 
-class S3Source : ObservableObject {
-	fileprivate struct Producers {
-		let s3: S3
-		
-		init(s3: S3) {
-			self.s3 = s3
-		}
-		
-		private func listBuckets() -> AnyPublisher<[S3.Bucket], Error> {
-			return Deferred { s3.listBuckets() }
-                .print()
-				.map({ $0.buckets?.compactMap({ $0 }) ?? [] })
-				.receive(on: DispatchQueue.main)
-				.eraseToAnyPublisher()
-		}
-		
-		func listBuckets<P : Publisher>(clock: P) -> AnyPublisher<Result<[S3.Bucket], Error>, Never> where P.Failure == Never {
-			return clock
-				.map { _ in listBuckets().catchAsResult() }
-				.switchToLatest()
-				.eraseToAnyPublisher()
-		}
-	}
-	private let producers: Producers
-	
-	fileprivate init(s3: S3) {
-		self.producers = .init(s3: s3)
-	}
-	
-	let loadClock = LocalClock()
-	@Published var bucketsResult: Result<[S3.Bucket], Error>?
-	
-	private lazy var listBucketsCancellable = producers.listBuckets(clock: loadClock.$counter)
-		.sink { self.bucketsResult = $0 }
-
-	func load() {
-		loadClock.tick()
-		_ = listBucketsCancellable
-	}
-}
-
-extension StoresSource {
-	func useBuckets() -> S3Source { .init(s3: s3) }
-}
-
 class BucketSource : ObservableObject {
 	let bucketName: String
-	private let s3: S3
-    
-    var collectedPressRootURL: URL? {
-        URL(string: "https://collected.press/1/s3/object/\(s3.region.rawValue)/\(bucketName)/")
-    }
+//	private let s3: S3
+	
+	var collectedPressRootURL: URL? {
+		URL(string: "https://collected.press/1/s3/object/\(producers.s3.region.rawValue)/\(bucketName)/")
+	}
 	
 	fileprivate struct Producers {
 		let bucketName: String
@@ -107,6 +70,16 @@ class BucketSource : ObservableObject {
 		init(bucketName: String, s3: S3) {
 			self.bucketName = bucketName
 			self.s3 = s3
+		}
+		
+		fileprivate init(bucketName: String, awsClient: AWSClient) async throws {
+			let s3Global = S3(client: awsClient)
+			let location = try await s3Global.getBucketLocation(.init(bucket: bucketName, expectedBucketOwner: nil))
+			let locationConstraint = location.locationConstraint!
+			let region = Region(awsRegionName: locationConstraint.rawValue)
+			let s3 = S3(client: awsClient, region: region)
+			
+			self.init(bucketName: bucketName, s3: s3)
 		}
 		
 		struct ListFilter {
@@ -133,11 +106,11 @@ class BucketSource : ObservableObject {
 		}
 		
 		private func list(filter: ListFilter) -> AnyPublisher<[S3.Object], Never> {
-            return Deferred { s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix)) }
-            .map({ $0.contents?.compactMap({ $0 }) ?? [] })
-            .replaceError(with: [])
-            .receive(on: DispatchQueue.main)
-            .eraseToAnyPublisher()
+			return Deferred { s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix)) }
+			.map({ $0.contents?.compactMap({ $0 }) ?? [] })
+			.replaceError(with: [])
+			.receive(on: DispatchQueue.main)
+			.eraseToAnyPublisher()
 		}
 		
 		func list<P : Publisher>(clock: P, filter: ListFilter) -> AnyPublisher<[S3.Object], Never> where P.Failure == Never {
@@ -147,44 +120,61 @@ class BucketSource : ObservableObject {
 				.eraseToAnyPublisher()
 		}
 		
+		func region() async throws -> S3.BucketLocationConstraint? {
+			let location = try await s3.getBucketLocation(.init(bucket: bucketName, expectedBucketOwner: nil))
+			return location.locationConstraint
+		}
+		
+		func list(region: Region, filter: ListFilter) async throws -> [S3.Object] {
+			let s3 = S3(client: self.s3.client, region: region)
+			let objects = try await s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix))
+			return objects.contents ?? []
+		}
+		
+		func getObject(key: String) async throws -> S3.GetObjectOutput {
+			return try await s3.getObject(.init(bucket: bucketName, key: key))
+		}
+		
 		func createPublicReadable(content: ContentResource) -> AnyPublisher<S3.PutObjectOutput, Error> {
 			let contentID = content.id
 			let key = contentID.objectStorageKey
-			print("PUT OBJECT: KEY", key)
 			
-            let request = S3.PutObjectRequest(acl: .publicRead, body: AWSPayload.data(content.data), bucket: bucketName, contentType: contentID.mediaType.string, key: key)
+			let request = S3.PutObjectRequest(acl: .publicRead, body: AWSPayload.data(content.data), bucket: bucketName, contentType: contentID.mediaType.string, key: key)
 			return Deferred { s3.putObject(request) }
-				.print()
-				.receive(on: DispatchQueue.main)
-				.eraseToAnyPublisher()
+			.print()
+			.receive(on: DispatchQueue.main)
+			.eraseToAnyPublisher()
 		}
 		
 		func makePublicReadable(contentID: ContentIdentifier) -> AnyPublisher<S3.PutObjectAclOutput, Error> {
 			let key = contentID.objectStorageKey
-            return makePublicReadable(key: key)
+			return makePublicReadable(key: key)
 		}
-        
-        func makePublicReadable(key: String) -> AnyPublisher<S3.PutObjectAclOutput, Error> {
-            let request = S3.PutObjectAclRequest(acl: .publicRead, bucket: bucketName, key: key)
-            return Deferred { s3.putObjectAcl(request) }
-                .receive(on: DispatchQueue.main)
-                .eraseToAnyPublisher()
-        }
+		
+		func makePublicReadable(key: String) -> AnyPublisher<S3.PutObjectAclOutput, Error> {
+			let request = S3.PutObjectAclRequest(acl: .publicRead, bucket: bucketName, key: key)
+			return Deferred { s3.putObjectAcl(request) }
+			.receive(on: DispatchQueue.main)
+			.eraseToAnyPublisher()
+		}
 		
 		func delete(key: String) -> AnyPublisher<S3.DeleteObjectOutput, Error> {
 			return Deferred { s3.deleteObject(.init(bucket: bucketName, key: key)) }
-				.print()
-				.receive(on: DispatchQueue.main)
-				.eraseToAnyPublisher()
+			.print()
+			.receive(on: DispatchQueue.main)
+			.eraseToAnyPublisher()
 		}
 	}
 	fileprivate let producers: Producers
 	
 	fileprivate init(bucketName: String, s3: S3) {
 		self.bucketName = bucketName
-		self.s3 = s3
-		
 		self.producers = .init(bucketName: bucketName, s3: s3)
+	}
+	
+	fileprivate init(bucketName: String, awsClient: AWSClient) async throws {
+		self.bucketName = bucketName
+		self.producers = try await .init(bucketName: bucketName, awsClient: awsClient)
 	}
 	
 	@Published var objects: [S3.Object]?
@@ -198,9 +188,13 @@ class BucketSource : ObservableObject {
 		_ = listCancellable
 	}
 	
+	func listAll(region: Region) async throws -> [S3.Object] {
+		try await producers.list(region: region, filter: .init(contentType: .all))
+	}
+	
 	@Published var textObjects: [S3.Object]?
 	@LocalClock var loadTextsClock
-//	let loadTextsClock = LocalClock()
+	//	let loadTextsClock = LocalClock()
 	private lazy var listTextsCancellable = producers.list(clock: $loadTextsClock, filter: .init(contentType: .texts))
 		.print("LOADING TEXTS!")
 		.sink { self.textObjects = $0 }
@@ -231,8 +225,16 @@ class BucketSource : ObservableObject {
 	}
 	
 	var createCancellables = Set<AnyCancellable>()
-    var changeCancellables = Set<AnyCancellable>()
+	var changeCancellables = Set<AnyCancellable>()
 	var deleteCancellables = Set<AnyCancellable>()
+	
+	func region() async throws -> S3.BucketLocationConstraint? {
+		try await producers.region()
+	}
+	
+	func getObject(key: String) async throws -> S3.GetObjectOutput {
+		try await producers.getObject(key: key)
+	}
 	
 	func createPublicReadable(content: ContentResource) {
 		producers.createPublicReadable(content: content)
@@ -246,19 +248,19 @@ class BucketSource : ObservableObject {
 			} receiveValue: { _ in }
 			.store(in: &createCancellables)
 	}
-    
-    func makePublicReadable(key: String) {
-        producers.makePublicReadable(key: key)
-            .sink { [self] completion in
-                switch completion {
-                case .finished:
-                    self.load()
-                case let .failure(error):
-                    print("Error make public read", error)
-                }
-            } receiveValue: { _ in }
-            .store(in: &changeCancellables)
-    }
+	
+	func makePublicReadable(key: String) {
+		producers.makePublicReadable(key: key)
+			.sink { [self] completion in
+				switch completion {
+				case .finished:
+					self.load()
+				case let .failure(error):
+					print("Error make public read", error)
+				}
+			} receiveValue: { _ in }
+			.store(in: &changeCancellables)
+	}
 	
 	func delete(key: String) {
 		producers.delete(key: key)
@@ -294,12 +296,12 @@ class BucketSource : ObservableObject {
 			nil
 		}
 		
-		private lazy var getDataProducer = bucketSource.s3
+		private lazy var getDataProducer = bucketSource.producers.s3
 			.getObject(.init(bucket: bucketSource.bucketName, key: key))
 			.toCombine()
 			.receive(on: DispatchQueue.main)
 		
-		private lazy var getACLProducer = bucketSource.s3
+		private lazy var getACLProducer = bucketSource.producers.s3
 			.getObjectAcl(.init(bucket: bucketSource.bucketName, key: key))
 			.toCombine()
 			.receive(on: DispatchQueue.main)
@@ -321,17 +323,16 @@ class BucketSource : ObservableObject {
 		}
 	}
 	
-	func object(key: String) -> ObjectSource { .init(bucketSource: self, key: key) }
-}
-
-extension S3Source {
-	func bucket(name: String) -> BucketSource { .init(bucketName: name, s3: producers.s3) }
+	func object(key: String) -> ObjectSource { ObjectSource(bucketSource: self, key: key) }
 }
 
 extension StoresSource {
-	func bucket(name: String) -> BucketSource { .init(bucketName: name, s3: s3) }
+//	func bucket(name: String) -> BucketSource { BucketSource(bucketName: name, s3: s3) }
+	
+	func bucketInCorrectedRegion(name: String) async throws -> BucketSource { try await BucketSource(bucketName: name, awsClient: s3.client) }
 }
 
+@MainActor
 class S3ObjectSource : ObservableObject {
 	private struct Producers {
 		let s3: S3
@@ -340,8 +341,8 @@ class S3ObjectSource : ObservableObject {
 		
 		func get() -> AnyPublisher<S3.GetObjectOutput, Error> {
 			return Deferred { s3.getObject(.init(bucket: bucketName, key: objectKey)) }
-				.receive(on: DispatchQueue.main)
-				.eraseToAnyPublisher()
+			.receive(on: DispatchQueue.main)
+			.eraseToAnyPublisher()
 		}
 	}
 	private let producers: Producers
@@ -351,10 +352,10 @@ class S3ObjectSource : ObservableObject {
 	}
 	
 	var objectKey: String { producers.objectKey }
-    
-    var collectedPressURL: URL? {
-        URL(string: "https://collected.press/1/s3/object/\(producers.s3.region.rawValue)/\(producers.bucketName)/\(producers.objectKey)")
-    }
+	
+	var collectedPressURL: URL? {
+		URL(string: "https://collected.press/1/s3/object/\(producers.s3.region.rawValue)/\(producers.bucketName)/\(producers.objectKey)")
+	}
 	
 	@Published var getResult: Result<S3.GetObjectOutput, Error>?
 	
@@ -368,5 +369,5 @@ class S3ObjectSource : ObservableObject {
 }
 
 extension BucketSource {
-	func useObject(key: String) -> S3ObjectSource { .init(bucketName: bucketName, objectKey: key, s3: producers.s3) }
+	@MainActor func useObject(key: String) -> S3ObjectSource { S3ObjectSource(bucketName: bucketName, objectKey: key, s3: producers.s3) }
 }

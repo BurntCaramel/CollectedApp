@@ -63,7 +63,7 @@ enum Settings {
 						let passwordData = existingItem[kSecValueData as String] as? Data,
                         let password = String(data: passwordData, encoding: String.Encoding.utf8)
 			else {
-				print("Couldn't decode AWS", queryResult)
+				print("Couldn't decode AWS", queryResult ?? "nil")
 				//                throw KeychainError.unexpectedPasswordData
 				return
 			}

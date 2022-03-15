@@ -62,7 +62,7 @@ struct StoresView: View {
 	var body: some View {
 		VStack {
 			if let storesSource = self.storesSource {
-				ListStoresView(bucketsSource: storesSource.useBuckets())
+				ListBucketsView(storesSource: storesSource)
 			} else {
 				Text("You must set up your AWS credentials first")
 			}
@@ -70,47 +70,105 @@ struct StoresView: View {
 	}
 }
 
-struct ListStoresView: View {
-	@ObservedObject var bucketsSource: S3Source
+@MainActor
+class BucketViewModel: ObservableObject {
+	var bucketSource: BucketSource
+	@Published var locationConstraint: S3.BucketLocationConstraint?
+	@Published var objects: [S3.Object]?
+	@Published var error: Error?
 	
-	var bucketNames: [String] {
-		switch bucketsSource.bucketsResult {
-		case .success(let buckets):
-			return buckets.compactMap({ $0.name })
-		default:
-			return []
+	/*struct Model {
+		let locationConstraint: S3.BucketLocationConstraint
+		var objects: [S3.Object]
+	}*/
+	
+	init(bucketSource: BucketSource) {
+		self.bucketSource = bucketSource
+	}
+	
+	func load() async {
+		do {
+//			self.bucketSource = BucketSource(
+			
+			if let locationConstraint = try await bucketSource.region(),
+			   let region = Region(awsRegionName: locationConstraint.rawValue) {
+				self.locationConstraint = locationConstraint
+				objects = try await bucketSource.listAll(region: region)
+			}
+		}
+		catch (let error) {
+			self.error = error
 		}
 	}
+}
+
+struct BucketInfoView: View {
+	@ObservedObject var bucketViewModel: BucketViewModel
+	
+	var body: some View {
+		switch bucketViewModel.locationConstraint {
+		case .some(let locationConstraint):
+			Text("Region: \(locationConstraint.rawValue)")
+		default:
+			Text("Loading…")
+				.task {
+					await bucketViewModel.load()
+				}
+		}
+	}
+}
+
+struct ListBucketsView: View {
+	@ObservedObject var storesSource: StoresSource
 	
 	var body: some View {
 		NavigationView {
-            switch bucketsSource.bucketsResult {
-            case .none:
-                Text("Loading…")
-                    .navigationBarTitle("Buckets")
-            case .some(.failure(let error)):
-                Text("Error: \(error.localizedDescription)")
-                    .navigationBarTitle("Buckets")
-            case .some(.success(let buckets)):
-                let bucketNames = buckets.compactMap({ $0.name })
-                List {
-                    ForEach(bucketNames, id: \.self) { bucketName in
-                        NavigationLink(destination: BucketView(bucketSource: bucketsSource.bucket(name: bucketName))) {
-                            Text(bucketName)
-                        }
-                    }
-                }
-                .navigationBarTitle("Buckets")
-            }
-		}
-		.onAppear {
-			self.bucketsSource.load()
+			AsyncView(action: { try await storesSource.listS3Buckets() }) { result in
+				Group {
+					switch result {
+					case .none:
+						Text("Loading…")
+					case .some(.failure(let error)):
+						Text("Error: \(error.localizedDescription)")
+					case .some(.success(let buckets)):
+						let bucketNames = buckets.compactMap({ $0.name })
+						List {
+							ForEach(bucketNames, id: \.self) { bucketName in
+								//						NavigationLink(destination: BucketView(bucketSource: bucketsSource.bucket(name: bucketName))) {
+								NavigationLink(destination: AsyncObjectView(loader: {
+									try await storesSource.bucketInCorrectedRegion(name: bucketName)
+								}, content: { result in
+									Group {
+										switch result {
+										case .some(.success(let value)):
+											BucketView(bucketSource: value)
+										case .some(.failure(let error)):
+											Text("Error loading \(error.localizedDescription)")
+										case .none:
+											Text("Listing bucket…")
+										}
+									}
+								})) {
+									Text(bucketName)
+								}
+							}
+						}
+					}
+				}
+			}
+			.navigationBarTitle("Buckets")
 		}
 	}
 }
 
 struct BucketView: View {
 	@ObservedObject var bucketSource: BucketSource
+	@ObservedObject var vm: BucketViewModel
+	
+	init(bucketSource: BucketSource) {
+		self.bucketSource = bucketSource
+		self.vm = .init(bucketSource: bucketSource)
+	}
 	
 	enum Filter : String {
 		case all
@@ -119,7 +177,7 @@ struct BucketView: View {
 		case pdf
 	}
 	
-	@State var filter: Filter = .image
+	@State var filter: Filter = .all
 	
 	struct NewState {
 		var mediaType = MediaType.text(.markdown)
@@ -189,6 +247,8 @@ struct BucketView: View {
                                 UIPasteboard.general.url = collectedPressURL
                             }
                         }
+				
+					ItemView.DigestSymbolView(digestHex: content.id.sha256DigestHex)
                     
                     Button("Create") {
                         bucketSource.createPublicReadable(content: content)
@@ -207,7 +267,7 @@ struct BucketView: View {
 		case .pdf:
 			return bucketSource.pdfObjects ?? []
 		case .all:
-			return bucketSource.objects ?? []
+			return vm.objects ?? []
 		}
 	}
 	
@@ -235,6 +295,116 @@ struct BucketView: View {
 			} else {
 				Text(digestHex).font(.caption)
 			}
+		}
+	}
+	
+	func loadChild(key: String) async throws -> (mediaType: MediaType, contentData: Data)? {
+		let output = try await bucketSource.getObject(key: key)
+		guard let mediaType = output.contentType, let contentData = output.body?.asData() else { return nil }
+		return (mediaType: MediaType(string: mediaType), contentData: contentData)
+	}
+	
+	func child(key: String) -> some View {
+		AsyncView(action: { return try await loadChild(key: key) }, content: { result in
+			Group {
+				switch result {
+				case .some(.success(let value)):
+					if let value = value {
+						ContentPreview.PreviewView(mediaType: value.mediaType, contentData: value.contentData)
+//						Text("Loaded! \(value.contentData.count)")
+					} else {
+						Text("No data")
+					}
+				case .some(.failure(let error)):
+					Text("Error loading \(error.localizedDescription)")
+				case .none:
+					Text("Loading…")
+				}
+			}
+		})
+	}
+	
+	var body: some View {
+		VStack {
+			Picker("Filter", selection: $filter) {
+				Text("Images").tag(Filter.image)
+				Text("Texts").tag(Filter.text)
+				Text("PDFs").tag(Filter.pdf)
+				Text("All").tag(Filter.all)
+            }.pickerStyle(.segmented)
+			
+			BucketInfoView(bucketViewModel: vm)
+            
+			List {
+				ForEach(objects, id: \.key) { object in
+//					NavigationLink(destination: ObjectInfoView(object: object, objectSource: bucketSource.useObject(key: object.key ?? ""))) {
+					NavigationLink(destination: child(key: object.key ?? "")) {
+						HStack {
+							ItemView(key: object.key ?? "")
+								.contextMenu {
+                                    Button("Make Public Readable") {
+                                        if let key = object.key {
+                                            bucketSource.makePublicReadable(key: key)
+                                        }
+                                    }
+									Button("Delete") {
+										if let key = object.key {
+											bucketSource.delete(key: key)
+										}
+									}
+								}
+							Spacer()
+							Text(ByteCountFormatter.string(fromByteCount: object.size ?? 0, countStyle: .file))
+						}
+					}
+				}
+				.onDelete { (indexSet) in
+					guard let objects = bucketSource.objects else { return }
+						
+					for index in indexSet {
+						let object = objects[index]
+						if let key = object.key {
+							print("DELETE!", key)
+							bucketSource.delete(key: key)
+						}
+					}
+				}
+			}
+            NavigationLink(destination: newFormView) {
+                Text("Upload")
+            }
+		}
+		.navigationBarTitle("\(bucketName) | Load #\(bucketSource.loadClock.counter)")
+		.onAppear(perform: bucketSource.load)
+	}
+}
+
+struct ItemView: View {
+	let key: String
+	
+	var contentIdentifier: ContentIdentifier? { .init(objectStorageKey: key) }
+	
+	var values: Optional<(imageName: String, text: String, contentIdentifier: ContentIdentifier)> {
+		guard let contentIdentifier = contentIdentifier else { return nil }
+		switch contentIdentifier.mediaType {
+		case .text(let textType): return (imageName: "doc.plaintext", text: textType.rawValue, contentIdentifier: contentIdentifier)
+		case .image(let imageType): return (imageName: "photo", text: imageType.rawValue, contentIdentifier: contentIdentifier)
+		case .application(.pdf): return (imageName: "doc.richtext", text: "pdf", contentIdentifier: contentIdentifier)
+		case .application(.javascript): return (imageName: "curlybraces.square", text: "javascript", contentIdentifier: contentIdentifier)
+		case .application(.json): return (imageName: "curlybraces.square", text: "json", contentIdentifier: contentIdentifier)
+		default: return nil
+		}
+	}
+	
+	var body: some View {
+		if let values = self.values {
+			HStack {
+				Image(systemName: values.imageName)
+				Text(values.text).textCase(.uppercase).font(.body)
+				DigestSymbolView(digestHex: values.contentIdentifier.sha256DigestHex)
+			}
+		} else {
+			Text(key)
 		}
 	}
 	
@@ -267,7 +437,10 @@ struct BucketView: View {
 			if let symbols = symbols, let colors = colors {
 				HStack(alignment: /*@START_MENU_TOKEN@*/.center/*@END_MENU_TOKEN@*/, spacing: nil) {
 					ForEach(symbols.indices) { index in
-						Image(systemName: symbols[index]).font(index % 2 == 0 ? .title : .body).foregroundColor(colors[index])
+						Image(systemName: symbols[index])
+							.font(.title)
+							.foregroundColor(colors[index])
+							.rotationEffect(index % 2 == 0 ? .zero : .degrees(180))
 					}
 				}
 			} else {
@@ -275,118 +448,20 @@ struct BucketView: View {
 			}
 		}
 	}
-	
-	struct ItemView: View {
-		let key: String
-        
-        var contentIdentifier: ContentIdentifier? { .init(objectStorageKey: key) }
-        
-        var values: Optional<(imageName: String, text: String, contentIdentifier: ContentIdentifier)> {
-            guard let contentIdentifier = contentIdentifier else { return nil }
-            switch contentIdentifier.mediaType {
-            case .text(let textType): return (imageName: "doc.plaintext", text: textType.rawValue, contentIdentifier: contentIdentifier)
-            case .image(let imageType): return (imageName: "photo", text: imageType.rawValue, contentIdentifier: contentIdentifier)
-            case .application(.pdf): return (imageName: "doc.richtext", text: "pdf", contentIdentifier: contentIdentifier)
-            case .application(.javascript): return (imageName: "curlybraces.square", text: "javascript", contentIdentifier: contentIdentifier)
-            case .application(.json): return (imageName: "curlybraces.square", text: "json", contentIdentifier: contentIdentifier)
-            default: return nil
-            }
-        }
-		
-		var body: some View {
-            if let values = self.values {
-                HStack {
-                    Image(systemName: values.imageName)
-                    Text(values.text).textCase(.uppercase).font(.body)
-                    DigestSymbolView(digestHex: values.contentIdentifier.sha256DigestHex)
-                }
-			} else {
-				Text(key)
-			}
-		}
-	}
-	
-	var body: some View {
-		VStack {
-			Text("Load #\(bucketSource.loadClock.counter)")
-			
-			switch filter {
-			case .text:
-				Text("").onAppear(perform: bucketSource.loadTexts)
-			case .image:
-				Text("").onAppear(perform: bucketSource.loadImages)
-			case .pdf:
-				Text("").onAppear(perform: bucketSource.loadPDFs)
-			case .all:
-				Text("").onAppear(perform: bucketSource.load)
-			}
-			
-			Picker("Filter", selection: $filter) {
-				Text("Images").tag(Filter.image)
-				Text("Texts").tag(Filter.text)
-				Text("PDFs").tag(Filter.pdf)
-				Text("All").tag(Filter.all)
-            }.pickerStyle(.segmented)
-			List {
-				ForEach(objects, id: \.key) { object in
-					NavigationLink(destination: ObjectInfoView(object: object, objectSource: bucketSource.useObject(key: object.key ?? ""))) {
-						HStack {
-							ItemView(key: object.key ?? "")
-								.contextMenu {
-                                    Button("Make Public Readable") {
-                                        if let key = object.key {
-                                            bucketSource.makePublicReadable(key: key)
-                                        }
-                                    }
-									Button("Delete") {
-										if let key = object.key {
-											print("DELETE!", key)
-											bucketSource.delete(key: key)
-										}
-									}
-								}
-							Spacer()
-							Text(ByteCountFormatter.string(fromByteCount: object.size ?? 0, countStyle: .file))
-						}
-					}
-				}
-				.onDelete { (indexSet) in
-					guard let objects = bucketSource.objects else { return }
-						
-					for index in indexSet {
-						let object = objects[index]
-						if let key = object.key {
-							print("DELETE!", key)
-							bucketSource.delete(key: key)
-						}
-					}
-				}
-			}
-			newFormView
-		}
-		.navigationBarTitle(bucketName)
-		.onAppear(perform: bucketSource.load)
-	}
 }
 
 struct ObjectInfoView: View {
 	var object: S3.Object
 	@ObservedObject var objectSource: S3ObjectSource
 	
-	var previewView: some View {
+	var validContent: (mediaType: MediaType, contentData: Data)? {
 		if
 			case let .success(output) = objectSource.getResult,
 			let mediaType = output.contentType,
-			let contentData = output.body?.asData()
-		{
-			return AnyView(
-				VStack {
-					ContentPreview.PreviewView(mediaType: MediaType(string: mediaType), contentData: contentData)
-				}
-			)
-		}
-		else {
-			return AnyView(Text("HAS NO PREVIEW"))
+			let contentData = output.body?.asData() {
+			return (MediaType(string: mediaType), contentData)
+		} else {
+			return nil
 		}
 	}
 	
@@ -395,15 +470,18 @@ struct ObjectInfoView: View {
 			Button(action: load) { Text("Load") }
             
             if let collectedPressURL = objectSource.collectedPressURL {
-                Text(collectedPressURL.absoluteString)
-                    .textSelection(.enabled)
-                    .onTapGesture {
-                        UIPasteboard.general.url = collectedPressURL
-                    }
+				Button("Copy Collected.Press URL") {
+                    UIPasteboard.general.url = collectedPressURL
+                }
             }
 			
 			VStack {
-				self.previewView
+				if let (mediaType, contentData) = validContent {
+					ContentPreview.PreviewView(mediaType: mediaType, contentData: contentData)
+				}
+				else {
+					Text("HAS NO PREVIEW")
+				}
 			}
 		}
 		.navigationBarTitle("\(objectSource.objectKey)", displayMode: .inline)

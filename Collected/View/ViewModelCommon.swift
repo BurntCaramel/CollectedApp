@@ -6,7 +6,68 @@
 //  Copyright © 2020 Patrick Smith. All rights reserved.
 //
 
+import SwiftUI
 import Combine
+
+struct AsyncView<Value, Content: View>: View {
+	let action: @Sendable () async throws -> Value
+	let content: (Result<Value, Error>?) -> Content
+	@State var value: Result<Value, Error>?
+	
+	init(action: @escaping @Sendable () async throws -> Value, content: @escaping (Result<Value, Error>?) -> Content) {
+		self.content = content
+		self.action = action
+	}
+	
+	var body: some View {
+		content(value)
+			.task {
+				do {
+					self.value = .success(try await action())
+				}
+				catch (let error) {
+					self.value = .failure(error)
+				}
+			}
+	}
+}
+
+struct AsyncObjectView<Value, Content: View>: View {
+	@MainActor
+	class AsyncState: ObservableObject {
+		let loader: @Sendable () async throws -> Value
+		
+		@Published var value: Result<Value, Error>?
+		
+		init(loader: @escaping @Sendable () async throws -> Value) {
+			self.loader = loader
+		}
+		
+		func load() async {
+			do {
+				self.value = .success(try await loader())
+			}
+			catch (let error) {
+				self.value = .failure(error)
+			}
+		}
+	}
+	
+	let content: (Result<Value, Error>?) -> Content
+	@StateObject var object: AsyncState
+	
+	init(loader: @escaping @Sendable () async throws -> Value, content: @escaping (Result<Value, Error>?) -> Content) {
+		self.content = content
+		self._object = StateObject(wrappedValue: AsyncState(loader: loader))
+	}
+	
+	var body: some View {
+		content(object.value)
+			.task {
+				await object.load()
+			}
+	}
+}
 
 //class LocalClock : ObservableObject {
 //	@Published private(set) var counter = 0

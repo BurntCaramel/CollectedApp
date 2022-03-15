@@ -24,7 +24,10 @@ enum ContentPreview {
                 case .application(.json), .application(.javascript):
                     TextPreview(contentData: contentData)
 				default:
-					Text("Can’t preview \(mediaType.string)")
+					VStack {
+						Text("Can’t preview \(mediaType.string)")
+						Text(ByteCountFormatter().string(fromByteCount: Int64(contentData.count)))
+					}
 				}
 			}
 		}
@@ -33,16 +36,14 @@ enum ContentPreview {
 	private struct TextPreview: View {
 		var contentData: Data
 		
-		@State var text = "hello"
-		
 		var contentString: String? {
 			String(data: contentData, encoding: .utf8)
 		}
 		
 		var body: some View {
-//			TextEditor(text: $text)
 			ScrollView {
 				Text(contentString ?? "")
+					.multilineTextAlignment(.leading)
 					.frame(maxWidth: .infinity)
 			}
 			.border(Color.gray)
