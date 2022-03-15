@@ -107,6 +107,45 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		B27EAEEA27E0176B00B9259D /* View */ = {
+			isa = PBXGroup;
+			children = (
+				B2FA9CBC25077C4500C32EEC /* FirstViewController.swift */,
+				B2FA9CBE25077C4500C32EEC /* SecondViewController.swift */,
+				B2FA9CFC250B4A5500C32EEC /* ContentPreview.swift */,
+				B24B22CD2540179500F0AC16 /* ViewModelCommon.swift */,
+			);
+			path = View;
+			sourceTree = "<group>";
+		};
+		B27EAEEB27E0178100B9259D /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				B29517132532BA2400B472A1 /* Settings.swift */,
+				B295171B2532DA2100B472A1 /* Content.swift */,
+				B282A639253EBE5A003B865C /* ContentRepo.swift */,
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		B27EAEEC27E017B200B9259D /* App */ = {
+			isa = PBXGroup;
+			children = (
+				B2FA9CB825077C4500C32EEC /* AppDelegate.swift */,
+				B2FA9CBA25077C4500C32EEC /* SceneDelegate.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		B27EAEED27E017C600B9259D /* LibraryExtensions */ = {
+			isa = PBXGroup;
+			children = (
+				B2FA9CFA250A4D9F00C32EEC /* NIO+Combine.swift */,
+				B2194C7E25477B4900BB0C7E /* Combine+Extensions.swift */,
+			);
+			path = LibraryExtensions;
+			sourceTree = "<group>";
+		};
 		B2FA9CAC25077C4400C32EEC = {
 			isa = PBXGroup;
 			children = (
@@ -131,17 +170,10 @@
 			isa = PBXGroup;
 			children = (
 				B2FA9CEA25077C6000C32EEC /* Collected.entitlements */,
-				B2FA9CB825077C4500C32EEC /* AppDelegate.swift */,
-				B2FA9CBA25077C4500C32EEC /* SceneDelegate.swift */,
-				B2FA9CFA250A4D9F00C32EEC /* NIO+Combine.swift */,
-				B29517132532BA2400B472A1 /* Settings.swift */,
-				B2FA9CBC25077C4500C32EEC /* FirstViewController.swift */,
-				B295171B2532DA2100B472A1 /* Content.swift */,
-				B2194C7E25477B4900BB0C7E /* Combine+Extensions.swift */,
-				B282A639253EBE5A003B865C /* ContentRepo.swift */,
-				B24B22CD2540179500F0AC16 /* ViewModelCommon.swift */,
-				B2FA9CFC250B4A5500C32EEC /* ContentPreview.swift */,
-				B2FA9CBE25077C4500C32EEC /* SecondViewController.swift */,
+				B27EAEEC27E017B200B9259D /* App */,
+				B27EAEED27E017C600B9259D /* LibraryExtensions */,
+				B27EAEEB27E0178100B9259D /* Model */,
+				B27EAEEA27E0176B00B9259D /* View */,
 				B2FA9CC025077C4500C32EEC /* Main.storyboard */,
 				B2FA9CC325077C4900C32EEC /* Assets.xcassets */,
 				B2FA9CC525077C4900C32EEC /* LaunchScreen.storyboard */,
