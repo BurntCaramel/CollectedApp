@@ -32,20 +32,20 @@ class LocalClock : ObservableObject {
 
 class StoresSource: ObservableObject {
 	private let awsClient: AWSClient
-	private let s3: S3
+//	private let s3: S3
 	
 	init(awsCredentials: Settings.AWSCredentials) {
 		awsClient = AWSClient(credentialProvider: .static(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey), httpClientProvider: .createNew)
-		//let awsClient = AWSClient(credentialProvider: .static(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey))
-		s3 = S3(client: awsClient, region: .useast1)
-		//s3 = .init(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey, region: .uswest2)
-		//		s3 = .init(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey, region: .useast1)
+//		s3 = S3(client: awsClient)
 	}
 	
-	func bucketInCorrectedRegion(name: String) async throws -> BucketSource { try await BucketSource(bucketName: name, awsClient: s3.client) }
+	func bucketInCorrectedRegion(name: String) async throws -> BucketSource {
+		return try await BucketSource(bucketName: name, awsClient: awsClient)
+	}
 	
 	func listS3Buckets() async throws -> [S3.Bucket] {
-		try await s3.listBuckets().buckets ?? []
+		let s3 = S3(client: awsClient)
+		return try await s3.listBuckets().buckets ?? []
 	}
 	
 	func shutdown() {
