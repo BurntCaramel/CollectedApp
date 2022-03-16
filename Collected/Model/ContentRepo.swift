@@ -62,7 +62,7 @@ class StoresSource: ObservableObject {
 	}
 }
 
-class BucketSource : ObservableObject {
+class BucketSource {
 	let bucketName: String
 	let s3: S3
 	
