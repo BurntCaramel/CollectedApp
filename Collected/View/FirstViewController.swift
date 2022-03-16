@@ -73,7 +73,7 @@ struct StoresView: View {
 
 @MainActor
 class BucketViewModel: ObservableObject {
-	var bucketSource: BucketSource
+	private var bucket: BucketSource
 	
 	struct Object {
 		let key: String
@@ -99,15 +99,11 @@ class BucketViewModel: ObservableObject {
 	}*/
 	
 	init(bucketSource: BucketSource) {
-		self.bucketSource = bucketSource
-		
-//		Task {
-//			await load()
-//		}
+		self.bucket = bucketSource
 	}
 	
-	var bucketName: String { bucketSource.bucketName }
-	var region: Region { bucketSource.region }
+	var bucketName: String { bucket.bucketName }
+	var region: Region { bucket.region }
 	var collectedPressRootURL: URL {
 		URL(string: "https://collected.press/1/s3/object/\(region.rawValue)/\(bucketName)/")!
 	}
@@ -118,7 +114,7 @@ class BucketViewModel: ObservableObject {
 	
 	func downloadObject(key: String) async throws -> (mediaType: MediaType, contentData: Data)? {
 		do {
-			let output = try await bucketSource.getObject(key: key)
+			let output = try await bucket.getObject(key: key)
 			guard let mediaType = output.contentType, let contentData = output.body?.asData() else { return nil }
 			return (mediaType: MediaType(string: mediaType), contentData: contentData)
 		}
@@ -130,7 +126,7 @@ class BucketViewModel: ObservableObject {
 	
 	func delete(key: String) async {
 		do {
-			let _ = try await bucketSource.delete(key: key)
+			let _ = try await bucket.delete(key: key)
 		}
 		catch (let error) {
 			self.error = error
@@ -140,7 +136,7 @@ class BucketViewModel: ObservableObject {
 	func load() async {
 		do {
 			print("will reload list")
-			objects = try await bucketSource.listAll().compactMap(Object.init)
+			objects = try await bucket.listAll().compactMap(Object.init)
 			print("did reload list")
 			loadCount += 1
 		}
@@ -151,7 +147,7 @@ class BucketViewModel: ObservableObject {
 	
 	func loadImages() async {
 		do {
-			imageObjects = try await bucketSource.listImages().compactMap(Object.init)
+			imageObjects = try await bucket.listImages().compactMap(Object.init)
 		}
 		catch (let error) {
 			self.error = error
@@ -160,7 +156,7 @@ class BucketViewModel: ObservableObject {
 	
 	func loadTexts() async {
 		do {
-			textObjects = try await bucketSource.listTexts().compactMap(Object.init)
+			textObjects = try await bucket.listTexts().compactMap(Object.init)
 		}
 		catch (let error) {
 			self.error = error
@@ -169,7 +165,7 @@ class BucketViewModel: ObservableObject {
 	
 	func loadPDFs() async {
 		do {
-			pdfObjects = try await bucketSource.listPDFs().compactMap(Object.init)
+			pdfObjects = try await bucket.listPDFs().compactMap(Object.init)
 		}
 		catch (let error) {
 			self.error = error
@@ -178,7 +174,7 @@ class BucketViewModel: ObservableObject {
 	
 	func createPublicReadable(content: ContentResource) async {
 		do {
-			try await bucketSource.createPublicReadable(content: content)
+			let _ = try await bucket.createPublicReadable(content: content)
 		}
 		catch (let error) {
 			self.error = error
@@ -187,7 +183,7 @@ class BucketViewModel: ObservableObject {
 	
 	func makePublicReadable(key: String) async {
 		do {
-			try await bucketSource.makePublicReadable(key: key)
+			let _ = try await bucket.makePublicReadable(key: key)
 		}
 		catch (let error) {
 			self.error = error
@@ -318,29 +314,21 @@ struct NewBucketObjectFormView: View {
 }
 
 struct BucketView: View {
-	@ObservedObject var vm: BucketViewModel
+	@StateObject var vm: BucketViewModel
 	
 	init(bucketSource: BucketSource) {
-		self.vm = BucketViewModel(bucketSource: bucketSource)
+		_vm = StateObject(wrappedValue: BucketViewModel(bucketSource: bucketSource))
 	}
 	
 	struct Loader: View {
 		let storesSource: StoresSource
 		let bucketName: String
 		
-		@State var loaded: Result<BucketSource, Error>?
-		
-		private struct TaskID: Equatable {
-			let storesSourceIdentifier: ObjectIdentifier
-			let bucketName: String
-		}
-		private var taskID: TaskID {
-			TaskID(storesSourceIdentifier: ObjectIdentifier(storesSource), bucketName: bucketName)
-		}
+		@State var result: Result<BucketSource, Error>?
 		
 		var body: some View {
 			Group {
-				switch loaded {
+				switch result {
 				case .some(.success(let value)):
 					BucketView(bucketSource: value)
 				case .some(.failure(let error)):
@@ -349,13 +337,12 @@ struct BucketView: View {
 					Text("Listing bucket…")
 				}
 			}
-				.task(id: taskID) {
+				.task {
 					do {
-						print("BucketView.Loader.task \(taskID)")
-						self.loaded = .success(try await storesSource.bucketInCorrectedRegion(name: bucketName))
+						self.result = .success(try await storesSource.bucketInCorrectedRegion(name: bucketName))
 					}
 					catch (let error) {
-						self.loaded = .failure(error)
+						self.result = .failure(error)
 					}
 				}
 		}
@@ -430,17 +417,14 @@ struct BucketView: View {
 		}
 	}
 	
-	func loadChild(key: String) async throws -> (mediaType: MediaType, contentData: Data)? {
-		return try await vm.downloadObject(key: key)
-	}
-	
 	func child(key: String) -> some View {
-		AsyncView(loader: { return try await loadChild(key: key) }, content: { result in
+		AsyncView(loader: { return try await vm.downloadObject(key: key) }, content: { result in
 			switch result {
 			case .some(.success(let value)):
 				if let value = value {
-					ContentPreview.PreviewView(mediaType: value.mediaType, contentData: value.contentData)
-					//						Text("Loaded! \(value.contentData.count)")
+					let contentID = ContentIdentifier(objectStorageKey: key)
+					let collectedPressURL = contentID.map { vm.collectedPressURL(contentID: $0) }
+					ValidObjectInfoView(key: key, mediaType: value.mediaType, contentData: value.contentData, collectedPressURL: collectedPressURL)
 				} else {
 					Text("No data")
 				}
@@ -470,7 +454,6 @@ struct BucketView: View {
 			if let objects = objects {
 				List {
 					ForEach(objects, id: \.key) { object in
-	//					NavigationLink(destination: ObjectInfoView(object: object, objectSource: bucketSource.useObject(key: object.key ?? ""))) {
 						NavigationLink(destination: child(key: object.key)) {
 							HStack {
 								ItemView(key: object.key)
@@ -622,45 +605,22 @@ struct ItemView: View {
 	}
 }
 
-struct ObjectInfoView: View {
-	var object: S3.Object
-	@ObservedObject var objectSource: S3ObjectSource
-	
-	var validContent: (mediaType: MediaType, contentData: Data)? {
-		if
-			case let .success(output) = objectSource.getResult,
-			let mediaType = output.contentType,
-			let contentData = output.body?.asData() {
-			return (MediaType(string: mediaType), contentData)
-		} else {
-			return nil
-		}
-	}
-	
+struct ValidObjectInfoView: View {
+	var key: String
+	var mediaType: MediaType
+	var contentData: Data
+	var collectedPressURL: URL?
+
 	var body: some View {
-		return VStack {
-			Button(action: load) { Text("Load") }
-            
-            if let collectedPressURL = objectSource.collectedPressURL {
+		VStack {
+            if let collectedPressURL = collectedPressURL {
 				Button("Copy Collected.Press URL") {
                     UIPasteboard.general.url = collectedPressURL
                 }
             }
-			
-			VStack {
-				if let (mediaType, contentData) = validContent {
-					ContentPreview.PreviewView(mediaType: mediaType, contentData: contentData)
-				}
-				else {
-					Text("HAS NO PREVIEW")
-				}
-			}
+
+			ContentPreview.PreviewView(mediaType: mediaType, contentData: contentData)
 		}
-		.navigationBarTitle("\(objectSource.objectKey)", displayMode: .inline)
-		.onAppear(perform: load)
-	}
-	
-	private func load() {
-		objectSource.load()
+		.navigationBarTitle(key, displayMode: .inline)
 	}
 }
