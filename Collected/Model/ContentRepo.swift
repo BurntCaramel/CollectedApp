@@ -55,6 +55,30 @@ class StoresSource: ObservableObject {
 
 class BucketSource : ObservableObject {
 	let bucketName: String
+	let s3: S3
+	
+	struct ListFilter {
+		enum ContentType {
+			case all
+			case texts
+			case images
+			case pdfs
+			
+			var prefix: String? {
+				switch self {
+				case .all:
+					return nil
+				case .texts:
+					return "sha256/text/"
+				case .images:
+					return "sha256/image/"
+				case .pdfs:
+					return "sha256/application/pdf/"
+				}
+			}
+		}
+		var contentType: ContentType
+	}
 	
 	fileprivate struct Producers {
 		let bucketName: String
@@ -69,29 +93,6 @@ class BucketSource : ObservableObject {
 			
 			self.bucketName = bucketName
 			self.s3 = s3
-		}
-		
-		struct ListFilter {
-			enum ContentType {
-				case all
-				case texts
-				case images
-				case pdfs
-				
-				var prefix: String? {
-					switch self {
-					case .all:
-						return nil
-					case .texts:
-						return "sha256/text/"
-					case .images:
-						return "sha256/image/"
-					case .pdfs:
-						return "sha256/application/pdf/"
-					}
-				}
-			}
-			var contentType: ContentType
 		}
 		
 		func list(filter: ListFilter) async throws -> [S3.Object] {
@@ -129,42 +130,13 @@ class BucketSource : ObservableObject {
 			let request = S3.PutObjectAclRequest(acl: .publicRead, bucket: bucketName, key: key)
 			return try await s3.putObjectAcl(request)
 		}
-		
-		func createPublicReadable(content: ContentResource) -> AnyPublisher<S3.PutObjectOutput, Error> {
-			let contentID = content.id
-			let key = contentID.objectStorageKey
-			
-			let request = S3.PutObjectRequest(acl: .publicRead, body: AWSPayload.data(content.data), bucket: bucketName, contentType: contentID.mediaType.string, key: key)
-			return Deferred { s3.putObject(request) }
-			.print()
-			.receive(on: DispatchQueue.main)
-			.eraseToAnyPublisher()
-		}
-		
-		func makePublicReadable(contentID: ContentIdentifier) -> AnyPublisher<S3.PutObjectAclOutput, Error> {
-			let key = contentID.objectStorageKey
-			return makePublicReadable(key: key)
-		}
-		
-		func makePublicReadable(key: String) -> AnyPublisher<S3.PutObjectAclOutput, Error> {
-			let request = S3.PutObjectAclRequest(acl: .publicRead, bucket: bucketName, key: key)
-			return Deferred { s3.putObjectAcl(request) }
-			.receive(on: DispatchQueue.main)
-			.eraseToAnyPublisher()
-		}
-		
-		func delete(key: String) -> AnyPublisher<S3.DeleteObjectOutput, Error> {
-			return Deferred { s3.deleteObject(.init(bucket: bucketName, key: key)) }
-			.print()
-			.receive(on: DispatchQueue.main)
-			.eraseToAnyPublisher()
-		}
 	}
 	fileprivate let producers: Producers
 	
 	fileprivate init(bucketName: String, awsClient: AWSClient) async throws {
 		self.bucketName = bucketName
 		self.producers = try await .init(bucketName: bucketName, awsClient: awsClient)
+		self.s3 = self.producers.s3
 	}
 	
 	var region: Region {
