@@ -94,26 +94,6 @@ class BucketSource : ObservableObject {
 			var contentType: ContentType
 		}
 		
-		private func list(filter: ListFilter) -> AnyPublisher<[S3.Object], Never> {
-			return Deferred { s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix)) }
-			.map({ $0.contents?.compactMap({ $0 }) ?? [] })
-			.replaceError(with: [])
-			.receive(on: DispatchQueue.main)
-			.eraseToAnyPublisher()
-		}
-		
-		func list<P : Publisher>(clock: P, filter: ListFilter) -> AnyPublisher<[S3.Object], Never> where P.Failure == Never {
-			return clock
-				.map { _ in list(filter: filter) }
-				.switchToLatest()
-				.eraseToAnyPublisher()
-		}
-		
-		func region() async throws -> S3.BucketLocationConstraint? {
-			let location = try await s3.getBucketLocation(.init(bucket: bucketName, expectedBucketOwner: nil))
-			return location.locationConstraint
-		}
-		
 		func list(filter: ListFilter) async throws -> [S3.Object] {
 			let objects = try await s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix))
 			return objects.contents ?? []
@@ -213,10 +193,6 @@ class BucketSource : ObservableObject {
 	
 	func listPDFs() async throws -> [S3.Object] {
 		try await producers.list(filter: .init(contentType: .pdfs))
-	}
-	
-	func region() async throws -> String? {
-		try await producers.region()?.rawValue
 	}
 	
 	func getObject(key: String) async throws -> S3.GetObjectOutput {
