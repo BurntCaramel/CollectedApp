@@ -32,20 +32,29 @@ class LocalClock : ObservableObject {
 
 class StoresSource: ObservableObject {
 	private let awsClient: AWSClient
-//	private let s3: S3
+	private let s3Global: S3
 	
 	init(awsCredentials: Settings.AWSCredentials) {
 		awsClient = AWSClient(credentialProvider: .static(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey), httpClientProvider: .createNew)
-//		s3 = S3(client: awsClient)
+		s3Global = S3(client: awsClient)
+	}
+	
+	func s3InCorrectRegion(bucketName: String) async throws -> S3 {
+		let s3Global = S3(client: awsClient)
+		let location = try await s3Global.getBucketLocation(.init(bucket: bucketName, expectedBucketOwner: nil))
+		let locationConstraint = location.locationConstraint!
+		let region = Region(awsRegionName: locationConstraint.rawValue)
+		return S3(client: awsClient, region: region)
 	}
 	
 	func bucketInCorrectedRegion(name: String) async throws -> BucketSource {
-		return try await BucketSource(bucketName: name, awsClient: awsClient)
+		let s3 = try await s3InCorrectRegion(bucketName: name)
+		return BucketSource(bucketName: name, s3: s3)
+//		return try await BucketSource(bucketName: name, awsClient: awsClient)
 	}
 	
 	func listS3Buckets() async throws -> [S3.Bucket] {
-		let s3 = S3(client: awsClient)
-		return try await s3.listBuckets().buckets ?? []
+		return try await s3Global.listBuckets().buckets ?? []
 	}
 	
 	func shutdown() {
@@ -80,107 +89,74 @@ class BucketSource : ObservableObject {
 		var contentType: ContentType
 	}
 	
-	fileprivate struct Producers {
-		let bucketName: String
-		let s3: S3
-		
-		fileprivate init(bucketName: String, awsClient: AWSClient) async throws {
-			let s3Global = S3(client: awsClient)
-			let location = try await s3Global.getBucketLocation(.init(bucket: bucketName, expectedBucketOwner: nil))
-			let locationConstraint = location.locationConstraint!
-			let region = Region(awsRegionName: locationConstraint.rawValue)
-			let s3 = S3(client: awsClient, region: region)
-			
-			self.bucketName = bucketName
-			self.s3 = s3
-		}
-		
-		func list(filter: ListFilter) async throws -> [S3.Object] {
-			let objects = try await s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix))
-			return objects.contents ?? []
-		}
-		
-		func list(region: Region, filter: ListFilter) async throws -> [S3.Object] {
-			let s3 = S3(client: self.s3.client, region: region)
-			let objects = try await s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix))
-			return objects.contents ?? []
-		}
-		
-		func getObject(key: String) async throws -> S3.GetObjectOutput {
-			return try await s3.getObject(.init(bucket: bucketName, key: key))
-		}
-		
-		func delete(key: String) async throws -> S3.DeleteObjectOutput {
-			return try await s3.deleteObject(.init(bucket: bucketName, key: key))
-		}
-		
-		func createPublicReadable(content: ContentResource) async throws -> S3.PutObjectOutput {
-			let contentID = content.id
-			let key = contentID.objectStorageKey
-			let request = S3.PutObjectRequest(acl: .publicRead, body: AWSPayload.data(content.data), bucket: bucketName, contentType: contentID.mediaType.string, key: key)
-			return try await s3.putObject(request)
-		}
-		
-		func makePublicReadable(contentID: ContentIdentifier) async throws -> S3.PutObjectAclOutput {
-			let key = contentID.objectStorageKey
-			return try await makePublicReadable(key: key)
-		}
-		
-		func makePublicReadable(key: String) async throws -> S3.PutObjectAclOutput {
-			let request = S3.PutObjectAclRequest(acl: .publicRead, bucket: bucketName, key: key)
-			return try await s3.putObjectAcl(request)
-		}
+	fileprivate init(bucketName: String, s3: S3) {
+		self.bucketName = bucketName
+		self.s3 = s3
 	}
-	fileprivate let producers: Producers
 	
 	fileprivate init(bucketName: String, awsClient: AWSClient) async throws {
+		let s3Global = S3(client: awsClient)
+		let location = try await s3Global.getBucketLocation(.init(bucket: bucketName, expectedBucketOwner: nil))
+		let locationConstraint = location.locationConstraint!
+		let region = Region(awsRegionName: locationConstraint.rawValue)
+		let s3 = S3(client: awsClient, region: region)
+		
 		self.bucketName = bucketName
-		self.producers = try await .init(bucketName: bucketName, awsClient: awsClient)
-		self.s3 = self.producers.s3
+		self.s3 = s3
+	}
+	
+	func list(filter: ListFilter) async throws -> [S3.Object] {
+		let objects = try await s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix))
+		return objects.contents ?? []
+	}
+	
+	func listAll() async throws -> [S3.Object] {
+		try await list(filter: .init(contentType: .all))
+	}
+	
+	func listTexts() async throws -> [S3.Object] {
+		try await list(filter: .init(contentType: .texts))
+	}
+	
+	func listImages() async throws -> [S3.Object] {
+		try await list(filter: .init(contentType: .images))
+	}
+	
+	func listPDFs() async throws -> [S3.Object] {
+		try await list(filter: .init(contentType: .pdfs))
+	}
+	
+	func getObject(key: String) async throws -> S3.GetObjectOutput {
+		return try await s3.getObject(.init(bucket: bucketName, key: key))
+	}
+	
+	func delete(key: String) async throws -> S3.DeleteObjectOutput {
+		return try await s3.deleteObject(.init(bucket: bucketName, key: key))
+	}
+	
+	func createPublicReadable(content: ContentResource) async throws -> S3.PutObjectOutput {
+		let contentID = content.id
+		let key = contentID.objectStorageKey
+		let request = S3.PutObjectRequest(acl: .publicRead, body: AWSPayload.data(content.data), bucket: bucketName, contentType: contentID.mediaType.string, key: key)
+		return try await s3.putObject(request)
+	}
+	
+	func makePublicReadable(contentID: ContentIdentifier) async throws -> S3.PutObjectAclOutput {
+		let key = contentID.objectStorageKey
+		return try await makePublicReadable(key: key)
+	}
+	
+	func makePublicReadable(key: String) async throws -> S3.PutObjectAclOutput {
+		let request = S3.PutObjectAclRequest(acl: .publicRead, bucket: bucketName, key: key)
+		return try await s3.putObjectAcl(request)
 	}
 	
 	var region: Region {
-		producers.s3.region
+		s3.region
 	}
 	
 	var collectedPressRootURL: URL? {
 		URL(string: "https://collected.press/1/s3/object/\(region.rawValue)/\(bucketName)/")
-	}
-	
-	func listAll(region: Region) async throws -> [S3.Object] {
-		try await producers.list(region: region, filter: .init(contentType: .all))
-	}
-	
-	func listAll() async throws -> [S3.Object] {
-		try await producers.list(filter: .init(contentType: .all))
-	}
-	
-	func listTexts() async throws -> [S3.Object] {
-		try await producers.list(filter: .init(contentType: .texts))
-	}
-	
-	func listImages() async throws -> [S3.Object] {
-		try await producers.list(filter: .init(contentType: .images))
-	}
-	
-	func listPDFs() async throws -> [S3.Object] {
-		try await producers.list(filter: .init(contentType: .pdfs))
-	}
-	
-	func getObject(key: String) async throws -> S3.GetObjectOutput {
-		try await producers.getObject(key: key)
-	}
-	
-	func delete(key: String) async throws -> S3.DeleteObjectOutput {
-		try await producers.delete(key: key)
-	}
-	
-	func createPublicReadable(content: ContentResource) async throws {
-		let _ = try await producers.createPublicReadable(content: content)
-	}
-	
-	func makePublicReadable(key: String) async throws {
-		let _ = try await producers.makePublicReadable(key: key)
 	}
 }
 
@@ -221,5 +197,5 @@ class S3ObjectSource : ObservableObject {
 }
 
 extension BucketSource {
-	@MainActor func useObject(key: String) -> S3ObjectSource { S3ObjectSource(bucketName: bucketName, objectKey: key, s3: producers.s3) }
+	@MainActor func useObject(key: String) -> S3ObjectSource { S3ObjectSource(bucketName: bucketName, objectKey: key, s3: s3) }
 }
