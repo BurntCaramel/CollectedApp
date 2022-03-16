@@ -75,10 +75,22 @@ struct StoresView: View {
 class BucketViewModel: ObservableObject {
 	var bucketSource: BucketSource
 	
-	@Published var objects: [S3.Object]?
-	@Published var imageObjects: [S3.Object]?
-	@Published var textObjects: [S3.Object]?
-	@Published var pdfObjects: [S3.Object]?
+	struct Object {
+		let key: String
+		let size: Int64
+		
+		init?(object: S3.Object) {
+			guard let key = object.key, let size = object.size else { return nil }
+			self.key = key
+			self.size = size
+		}
+	}
+	
+	@Published var loadCount = 0
+	@Published var objects: [Object]?
+	@Published var imageObjects: [Object]?
+	@Published var textObjects: [Object]?
+	@Published var pdfObjects: [Object]?
 	@Published var error: Error?
 	
 	/*struct Model {
@@ -88,13 +100,37 @@ class BucketViewModel: ObservableObject {
 	
 	init(bucketSource: BucketSource) {
 		self.bucketSource = bucketSource
+		
+//		Task {
+//			await load()
+//		}
 	}
 	
+	var bucketName: String { bucketSource.bucketName }
 	var region: Region { bucketSource.region }
+	var collectedPressRootURL: URL {
+		URL(string: "https://collected.press/1/s3/object/\(region.rawValue)/\(bucketName)/")!
+	}
+	
+	func collectedPressURL(contentID: ContentIdentifier) -> URL {
+		collectedPressRootURL.appendingPathComponent(contentID.objectStorageKey)
+	}
+	
+	func downloadObject(key: String) async throws -> (mediaType: MediaType, contentData: Data)? {
+		do {
+			let output = try await bucketSource.getObject(key: key)
+			guard let mediaType = output.contentType, let contentData = output.body?.asData() else { return nil }
+			return (mediaType: MediaType(string: mediaType), contentData: contentData)
+		}
+		catch (let error) {
+			self.error = error
+			return nil
+		}
+	}
 	
 	func delete(key: String) async {
 		do {
-			try await bucketSource.delete(key: key)
+			let _ = try await bucketSource.delete(key: key)
 		}
 		catch (let error) {
 			self.error = error
@@ -103,7 +139,10 @@ class BucketViewModel: ObservableObject {
 	
 	func load() async {
 		do {
-			objects = try await bucketSource.listAll()
+			print("will reload list")
+			objects = try await bucketSource.listAll().compactMap(Object.init)
+			print("did reload list")
+			loadCount += 1
 		}
 		catch (let error) {
 			self.error = error
@@ -112,7 +151,7 @@ class BucketViewModel: ObservableObject {
 	
 	func loadImages() async {
 		do {
-			imageObjects = try await bucketSource.listImages()
+			imageObjects = try await bucketSource.listImages().compactMap(Object.init)
 		}
 		catch (let error) {
 			self.error = error
@@ -121,7 +160,7 @@ class BucketViewModel: ObservableObject {
 	
 	func loadTexts() async {
 		do {
-			textObjects = try await bucketSource.listTexts()
+			textObjects = try await bucketSource.listTexts().compactMap(Object.init)
 		}
 		catch (let error) {
 			self.error = error
@@ -130,7 +169,25 @@ class BucketViewModel: ObservableObject {
 	
 	func loadPDFs() async {
 		do {
-			pdfObjects = try await bucketSource.listPDFs()
+			pdfObjects = try await bucketSource.listPDFs().compactMap(Object.init)
+		}
+		catch (let error) {
+			self.error = error
+		}
+	}
+	
+	func createPublicReadable(content: ContentResource) async {
+		do {
+			try await bucketSource.createPublicReadable(content: content)
+		}
+		catch (let error) {
+			self.error = error
+		}
+	}
+	
+	func makePublicReadable(key: String) async {
+		do {
+			try await bucketSource.makePublicReadable(key: key)
 		}
 		catch (let error) {
 			self.error = error
@@ -174,7 +231,6 @@ struct ListBucketsView: View {
 }
 
 struct NewBucketObjectFormView: View {
-	@ObservedObject var bucketSource: BucketSource
 	@ObservedObject var vm: BucketViewModel
 	
 	struct NewState {
@@ -197,7 +253,7 @@ struct NewBucketObjectFormView: View {
 			}
 			.foregroundColor(.white)
 			.background(isDropActive ? Color.purple : Color.blue)
-			.onDrop(of: [UTType.text, UTType.image, UTType.pdf], delegate: Drop(bucketSource: bucketSource))
+			.onDrop(of: [UTType.text, UTType.image, UTType.pdf], delegate: Drop(vm: vm))
 			
 			Form {
 				TextEditor(text: $newState.stringContent)
@@ -206,6 +262,7 @@ struct NewBucketObjectFormView: View {
 				Picker("Content Type", selection: $newState.mediaType) {
 					Text("Markdown").tag(MediaType.text(.markdown))
 					Text("Plain text").tag(MediaType.text(.plain))
+					Text("HTML").tag(MediaType.text(.html))
 					Text("JSON").tag(MediaType.application(.json))
 					Text("JavaScript").tag(MediaType.application(.javascript))
 				}.pickerStyle(.menu)
@@ -213,23 +270,24 @@ struct NewBucketObjectFormView: View {
 				if let content = newState.content {
 					Text(content.id.objectStorageKey)
 						.onTapGesture {
-							if let collectedPressURL = bucketSource.collectedPressRootURL?.appendingPathComponent(content.id.objectStorageKey) {
-								UIPasteboard.general.url = collectedPressURL
-							}
+							UIPasteboard.general.url = vm.collectedPressURL(contentID: content.id)
 						}
 				
 					ItemView.DigestSymbolView(digestHex: content.id.sha256DigestHex)
 					
 					Button("Create") {
-						bucketSource.createPublicReadable(content: content)
+						Task {
+							await vm.createPublicReadable(content: content)
+						}
 					}
 				}
 			}
 		}
 	}
 	
+	@MainActor
 	struct Drop : DropDelegate {
-		let bucketSource: BucketSource
+		let vm: BucketViewModel
 		
 		func performDrop(info: DropInfo) -> Bool {
 			var count = 0
@@ -245,7 +303,9 @@ struct NewBucketObjectFormView: View {
 						if let data = data {
 							print("RECEIVED DATA", data)
 							let content = ContentResource(data: data, mediaType: mediaType)
-							bucketSource.createPublicReadable(content: content)
+							Task { [vm] in
+								await vm.createPublicReadable(content: content)
+							}
 							count += 1
 						}
 					})
@@ -258,23 +318,29 @@ struct NewBucketObjectFormView: View {
 }
 
 struct BucketView: View {
-	@ObservedObject var bucketSource: BucketSource
 	@ObservedObject var vm: BucketViewModel
 	
 	init(bucketSource: BucketSource) {
-		self.bucketSource = bucketSource
-		self.vm = .init(bucketSource: bucketSource)
+		self.vm = BucketViewModel(bucketSource: bucketSource)
 	}
 	
 	struct Loader: View {
 		let storesSource: StoresSource
 		let bucketName: String
 		
+		@State var loaded: Result<BucketSource, Error>?
+		
+		private struct TaskID: Equatable {
+			let storesSourceIdentifier: ObjectIdentifier
+			let bucketName: String
+		}
+		private var taskID: TaskID {
+			TaskID(storesSourceIdentifier: ObjectIdentifier(storesSource), bucketName: bucketName)
+		}
+		
 		var body: some View {
-			AsyncView(loader: {
-				try await storesSource.bucketInCorrectedRegion(name: bucketName)
-			}) { result in
-				switch result {
+			Group {
+				switch loaded {
 				case .some(.success(let value)):
 					BucketView(bucketSource: value)
 				case .some(.failure(let error)):
@@ -283,7 +349,32 @@ struct BucketView: View {
 					Text("Listing bucket…")
 				}
 			}
+				.task(id: taskID) {
+					do {
+						print("BucketView.Loader.task \(taskID)")
+						self.loaded = .success(try await storesSource.bucketInCorrectedRegion(name: bucketName))
+					}
+					catch (let error) {
+						self.loaded = .failure(error)
+					}
+				}
 		}
+		
+//		var body: some View {
+//			AsyncObjectView(loader: { () -> BucketSource in
+//				let _ = print("BucketView.Loader")
+//				return try await storesSource.bucketInCorrectedRegion(name: bucketName)
+//			}) { result in
+//				switch result {
+//				case .some(.success(let value)):
+//					BucketView(bucketSource: value)
+//				case .some(.failure(let error)):
+//					Text("Error loading \(error.localizedDescription)")
+//				case .none:
+//					Text("Listing bucket…")
+//				}
+//			}
+//		}
 	}
 	
 	enum Filter : String {
@@ -295,9 +386,10 @@ struct BucketView: View {
 	
 	@State var filter: Filter = .all
 	
-	private var bucketName: String { bucketSource.bucketName }
+	private var bucketName: String { vm.bucketName }
 	
-	var objects: [S3.Object]? {
+	var objects: [BucketViewModel.Object]? {
+		print("use \(filter) \(ObjectIdentifier(vm))")
 		switch filter {
 		case .text:
 			return vm.textObjects
@@ -306,6 +398,7 @@ struct BucketView: View {
 		case .pdf:
 			return vm.pdfObjects
 		case .all:
+			print("use all objects \(vm.objects != nil)")
 			return vm.objects
 		}
 	}
@@ -338,9 +431,7 @@ struct BucketView: View {
 	}
 	
 	func loadChild(key: String) async throws -> (mediaType: MediaType, contentData: Data)? {
-		let output = try await bucketSource.getObject(key: key)
-		guard let mediaType = output.contentType, let contentData = output.body?.asData() else { return nil }
-		return (mediaType: MediaType(string: mediaType), contentData: contentData)
+		return try await vm.downloadObject(key: key)
 	}
 	
 	func child(key: String) -> some View {
@@ -370,42 +461,46 @@ struct BucketView: View {
 				Text("All").tag(Filter.all)
             }.pickerStyle(.segmented)
 			
+			if let error = vm.error {
+				Text("Error: \(error.localizedDescription)")
+			}
+			
 			BucketInfoView(bucketViewModel: vm)
             
 			if let objects = objects {
 				List {
 					ForEach(objects, id: \.key) { object in
 	//					NavigationLink(destination: ObjectInfoView(object: object, objectSource: bucketSource.useObject(key: object.key ?? ""))) {
-						NavigationLink(destination: child(key: object.key ?? "")) {
+						NavigationLink(destination: child(key: object.key)) {
 							HStack {
-								ItemView(key: object.key ?? "")
+								ItemView(key: object.key)
 									.contextMenu {
 										Button("Make Public Readable") {
-											if let key = object.key {
-												bucketSource.makePublicReadable(key: key)
+											Task {
+												await vm.makePublicReadable(key: object.key)
 											}
 										}
 										Button("Delete") {
-											if let key = object.key {
-												bucketSource.delete(key: key)
+											Task {
+												await vm.delete(key: object.key)
+												await reload()
 											}
 										}
 									}
 								Spacer()
-								Text(ByteCountFormatter.string(fromByteCount: object.size ?? 0, countStyle: .file))
+								Text(ByteCountFormatter.string(fromByteCount: object.size, countStyle: .file))
 							}
 						}
 					}
 					.onDelete { (indexSet) in
-						guard let objects = bucketSource.objects else { return }
+						guard let objects = self.objects else { return }
 							
 						for index in indexSet {
 							let object = objects[index]
-							if let key = object.key {
-								print("DELETE!", key)
-								Task {
-									await vm.delete(key: key)
-								}
+							print("DELETE!", object.key)
+							Task {
+								await vm.delete(key: object.key)
+								await reload()
 							}
 						}
 					}
@@ -417,38 +512,42 @@ struct BucketView: View {
 				}
 			}
 			
-            NavigationLink(destination: NewBucketObjectFormView(bucketSource: bucketSource, vm: vm)) {
+            NavigationLink(destination: NewBucketObjectFormView(vm: vm)) {
                 Text("Create")
             }
 		}
-		.navigationBarTitle("\(bucketName) | Load #\(bucketSource.loadClock.counter)")
-		.task {
-			print("Load bucket \(filter)")
-			switch filter {
-			case .all:
-				await vm.load()
-			case .text:
-				await vm.loadTexts()
-			case .image:
-				await vm.loadImages()
-			case .pdf:
-				await vm.loadPDFs()
-			}
+		.navigationBarTitle(bucketName)
+		.task(id: ObjectIdentifier(vm)) {
+//		.task {
+			print(".task")
+			await reload()
 		}
 		.onChange(of: filter) { filter in
-			Task.detached {
-				switch filter {
-				case .all:
-					await vm.load()
-				case .text:
-					await vm.loadTexts()
-				case .image:
-					await vm.loadImages()
-				case .pdf:
-					await vm.loadPDFs()
-				}
+			print(".onChange")
+			Task {
+				await reload(filter: filter)
 			}
 		}
+	}
+	
+	@MainActor
+	func reload(filter: Filter) async {
+		print("reload() \(filter) \(ObjectIdentifier(vm))")
+		switch filter {
+		case .all:
+			await vm.load()
+		case .text:
+			await vm.loadTexts()
+		case .image:
+			await vm.loadImages()
+		case .pdf:
+			await vm.loadPDFs()
+		}
+	}
+	
+	@MainActor
+	func reload() async {
+		await reload(filter: filter)
 	}
 }
 

@@ -42,9 +42,7 @@ class StoresSource: ObservableObject {
 		//		s3 = .init(accessKeyId: awsCredentials.accessKeyID, secretAccessKey: awsCredentials.secretAccessKey, region: .useast1)
 	}
 	
-	func s3(region: Region) -> S3 {
-		return S3(client: awsClient, region: region)
-	}
+	func bucketInCorrectedRegion(name: String) async throws -> BucketSource { try await BucketSource(bucketName: name, awsClient: s3.client) }
 	
 	func listS3Buckets() async throws -> [S3.Bucket] {
 		try await s3.listBuckets().buckets ?? []
@@ -62,11 +60,6 @@ class BucketSource : ObservableObject {
 		let bucketName: String
 		let s3: S3
 		
-		init(bucketName: String, s3: S3) {
-			self.bucketName = bucketName
-			self.s3 = s3
-		}
-		
 		fileprivate init(bucketName: String, awsClient: AWSClient) async throws {
 			let s3Global = S3(client: awsClient)
 			let location = try await s3Global.getBucketLocation(.init(bucket: bucketName, expectedBucketOwner: nil))
@@ -74,7 +67,8 @@ class BucketSource : ObservableObject {
 			let region = Region(awsRegionName: locationConstraint.rawValue)
 			let s3 = S3(client: awsClient, region: region)
 			
-			self.init(bucketName: bucketName, s3: s3)
+			self.bucketName = bucketName
+			self.s3 = s3
 		}
 		
 		struct ListFilter {
@@ -139,6 +133,23 @@ class BucketSource : ObservableObject {
 			return try await s3.deleteObject(.init(bucket: bucketName, key: key))
 		}
 		
+		func createPublicReadable(content: ContentResource) async throws -> S3.PutObjectOutput {
+			let contentID = content.id
+			let key = contentID.objectStorageKey
+			let request = S3.PutObjectRequest(acl: .publicRead, body: AWSPayload.data(content.data), bucket: bucketName, contentType: contentID.mediaType.string, key: key)
+			return try await s3.putObject(request)
+		}
+		
+		func makePublicReadable(contentID: ContentIdentifier) async throws -> S3.PutObjectAclOutput {
+			let key = contentID.objectStorageKey
+			return try await makePublicReadable(key: key)
+		}
+		
+		func makePublicReadable(key: String) async throws -> S3.PutObjectAclOutput {
+			let request = S3.PutObjectAclRequest(acl: .publicRead, bucket: bucketName, key: key)
+			return try await s3.putObjectAcl(request)
+		}
+		
 		func createPublicReadable(content: ContentResource) -> AnyPublisher<S3.PutObjectOutput, Error> {
 			let contentID = content.id
 			let key = contentID.objectStorageKey
@@ -171,11 +182,6 @@ class BucketSource : ObservableObject {
 	}
 	fileprivate let producers: Producers
 	
-	fileprivate init(bucketName: String, s3: S3) {
-		self.bucketName = bucketName
-		self.producers = .init(bucketName: bucketName, s3: s3)
-	}
-	
 	fileprivate init(bucketName: String, awsClient: AWSClient) async throws {
 		self.bucketName = bucketName
 		self.producers = try await .init(bucketName: bucketName, awsClient: awsClient)
@@ -187,17 +193,6 @@ class BucketSource : ObservableObject {
 	
 	var collectedPressRootURL: URL? {
 		URL(string: "https://collected.press/1/s3/object/\(region.rawValue)/\(bucketName)/")
-	}
-	
-	@Published var objects: [S3.Object]?
-	let loadClock = LocalClock()
-	private lazy var listCancellable = producers.list(clock: loadClock.$counter, filter: .init(contentType: .all))
-		.print("LOADING ALL!")
-		.sink { self.objects = $0 }
-	
-	func load() {
-		loadClock.tick()
-		_ = listCancellable
 	}
 	
 	func listAll(region: Region) async throws -> [S3.Object] {
@@ -220,148 +215,25 @@ class BucketSource : ObservableObject {
 		try await producers.list(filter: .init(contentType: .pdfs))
 	}
 	
-	@Published var textObjects: [S3.Object]?
-	@LocalClock var loadTextsClock
-	//	let loadTextsClock = LocalClock()
-	private lazy var listTextsCancellable = producers.list(clock: $loadTextsClock, filter: .init(contentType: .texts))
-		.print("LOADING TEXTS!")
-		.sink { self.textObjects = $0 }
-	
-	func loadTexts() {
-		loadTextsClock.tick()
-		_ = listTextsCancellable
-	}
-	
-	@Published var imageObjects: [S3.Object]?
-	@LocalClock var loadImagesClock
-	private lazy var listImagesCancellable = producers.list(clock: $loadImagesClock, filter: .init(contentType: .images))
-		.print("LOADING IMAGES!")
-		.sink { self.imageObjects = $0 }
-	func loadImages() {
-		loadImagesClock.tick()
-		_ = listImagesCancellable
-	}
-	
-	@Published var pdfObjects: [S3.Object]?
-	@LocalClock var loadPDFsClock
-	private lazy var listPDFsCancellable = producers.list(clock: $loadPDFsClock, filter: .init(contentType: .pdfs))
-		.print("LOADING PDFS!")
-		.sink { self.pdfObjects = $0 }
-	func loadPDFs() {
-		loadPDFsClock.tick()
-		_ = listPDFsCancellable
-	}
-	
-	var createCancellables = Set<AnyCancellable>()
-	var changeCancellables = Set<AnyCancellable>()
-	var deleteCancellables = Set<AnyCancellable>()
-	
-	func region() async throws -> S3.BucketLocationConstraint? {
-		try await producers.region()
+	func region() async throws -> String? {
+		try await producers.region()?.rawValue
 	}
 	
 	func getObject(key: String) async throws -> S3.GetObjectOutput {
 		try await producers.getObject(key: key)
 	}
 	
-	func delete(key: String) async throws {
+	func delete(key: String) async throws -> S3.DeleteObjectOutput {
 		try await producers.delete(key: key)
 	}
 	
-	func createPublicReadable(content: ContentResource) {
-		producers.createPublicReadable(content: content)
-			.sink { [self] completion in
-				switch completion {
-				case .finished:
-					self.load()
-				case let .failure(error):
-					print("Error creating", error)
-				}
-			} receiveValue: { _ in }
-			.store(in: &createCancellables)
+	func createPublicReadable(content: ContentResource) async throws {
+		let _ = try await producers.createPublicReadable(content: content)
 	}
 	
-	func makePublicReadable(key: String) {
-		producers.makePublicReadable(key: key)
-			.sink { [self] completion in
-				switch completion {
-				case .finished:
-					self.load()
-				case let .failure(error):
-					print("Error make public read", error)
-				}
-			} receiveValue: { _ in }
-			.store(in: &changeCancellables)
+	func makePublicReadable(key: String) async throws {
+		let _ = try await producers.makePublicReadable(key: key)
 	}
-	
-	func delete(key: String) {
-		producers.delete(key: key)
-			.sink { [self] completion in
-				switch completion {
-				case .finished:
-					self.load()
-				case let .failure(error):
-					print("ERror deleting", error)
-				}
-			} receiveValue: { _ in }
-			.store(in: &deleteCancellables)
-	}
-	
-	class ObjectSource: ObservableObject {
-		private let bucketSource: BucketSource
-		let key: String
-		
-		fileprivate init(bucketSource: BucketSource, key: String) {
-			self.bucketSource = bucketSource
-			self.key = key
-		}
-		
-		private var cancellables = Set<AnyCancellable>()
-		@Published private var getObjectOutput: S3.GetObjectOutput?
-		@Published private var getACLOutput: S3.GetObjectAclOutput?
-		
-		var data: Data? {
-			getObjectOutput?.body?.asData()
-		}
-		
-		var isPublicReadable: Bool? {
-			nil
-		}
-		
-		private lazy var getDataProducer = bucketSource.producers.s3
-			.getObject(.init(bucket: bucketSource.bucketName, key: key))
-			.toCombine()
-			.receive(on: DispatchQueue.main)
-		
-		private lazy var getACLProducer = bucketSource.producers.s3
-			.getObjectAcl(.init(bucket: bucketSource.bucketName, key: key))
-			.toCombine()
-			.receive(on: DispatchQueue.main)
-		
-		func load() {
-			getDataProducer.sink { (completion) in
-				print("COMPLETED", completion)
-			} receiveValue: { (output) in
-				self.getObjectOutput = output
-			}
-			.store(in: &cancellables)
-			
-			getACLProducer.sink { (completion) in
-				
-			} receiveValue: { (output) in
-				self.getACLOutput = output
-			}
-			.store(in: &cancellables)
-		}
-	}
-	
-	func object(key: String) -> ObjectSource { ObjectSource(bucketSource: self, key: key) }
-}
-
-extension StoresSource {
-//	func bucket(name: String) -> BucketSource { BucketSource(bucketName: name, s3: s3) }
-	
-	func bucketInCorrectedRegion(name: String) async throws -> BucketSource { try await BucketSource(bucketName: name, awsClient: s3.client) }
 }
 
 @MainActor
