@@ -40,6 +40,7 @@ class FirstHostingController: UIHostingController<StoresView> {
 	
 	override func viewDidAppear(_ animated: Bool) {
 		settings.$awsCredentials.sink { [weak self] (awsCredentials) in
+//			self?.rootView = StoresView(storesSource: self!.storesSource)
 			self?.storesSource = StoresSource(awsCredentials: awsCredentials)
 		}.store(in: &cancellables)
 		
@@ -73,8 +74,11 @@ struct StoresView: View {
 @MainActor
 class BucketViewModel: ObservableObject {
 	var bucketSource: BucketSource
-	@Published var locationConstraint: S3.BucketLocationConstraint?
+	
 	@Published var objects: [S3.Object]?
+	@Published var imageObjects: [S3.Object]?
+	@Published var textObjects: [S3.Object]?
+	@Published var pdfObjects: [S3.Object]?
 	@Published var error: Error?
 	
 	/*struct Model {
@@ -86,15 +90,47 @@ class BucketViewModel: ObservableObject {
 		self.bucketSource = bucketSource
 	}
 	
+	var region: Region { bucketSource.region }
+	
+	func delete(key: String) async {
+		do {
+			try await bucketSource.delete(key: key)
+		}
+		catch (let error) {
+			self.error = error
+		}
+	}
+	
 	func load() async {
 		do {
-//			self.bucketSource = BucketSource(
-			
-			if let locationConstraint = try await bucketSource.region(),
-			   let region = Region(awsRegionName: locationConstraint.rawValue) {
-				self.locationConstraint = locationConstraint
-				objects = try await bucketSource.listAll(region: region)
-			}
+			objects = try await bucketSource.listAll()
+		}
+		catch (let error) {
+			self.error = error
+		}
+	}
+	
+	func loadImages() async {
+		do {
+			imageObjects = try await bucketSource.listImages()
+		}
+		catch (let error) {
+			self.error = error
+		}
+	}
+	
+	func loadTexts() async {
+		do {
+			textObjects = try await bucketSource.listTexts()
+		}
+		catch (let error) {
+			self.error = error
+		}
+	}
+	
+	func loadPDFs() async {
+		do {
+			pdfObjects = try await bucketSource.listPDFs()
 		}
 		catch (let error) {
 			self.error = error
@@ -106,15 +142,7 @@ struct BucketInfoView: View {
 	@ObservedObject var bucketViewModel: BucketViewModel
 	
 	var body: some View {
-		switch bucketViewModel.locationConstraint {
-		case .some(let locationConstraint):
-			Text("Region: \(locationConstraint.rawValue)")
-		default:
-			Text("Loading…")
-				.task {
-					await bucketViewModel.load()
-				}
-		}
+		Text("Region: \(bucketViewModel.region.rawValue)")
 	}
 }
 
@@ -123,34 +151,18 @@ struct ListBucketsView: View {
 	
 	var body: some View {
 		NavigationView {
-			AsyncView(action: { try await storesSource.listS3Buckets() }) { result in
-				Group {
-					switch result {
-					case .none:
-						Text("Loading…")
-					case .some(.failure(let error)):
-						Text("Error: \(error.localizedDescription)")
-					case .some(.success(let buckets)):
-						let bucketNames = buckets.compactMap({ $0.name })
-						List {
-							ForEach(bucketNames, id: \.self) { bucketName in
-								//						NavigationLink(destination: BucketView(bucketSource: bucketsSource.bucket(name: bucketName))) {
-								NavigationLink(destination: AsyncObjectView(loader: {
-									try await storesSource.bucketInCorrectedRegion(name: bucketName)
-								}, content: { result in
-									Group {
-										switch result {
-										case .some(.success(let value)):
-											BucketView(bucketSource: value)
-										case .some(.failure(let error)):
-											Text("Error loading \(error.localizedDescription)")
-										case .none:
-											Text("Listing bucket…")
-										}
-									}
-								})) {
-									Text(bucketName)
-								}
+			AsyncView(loader: { try await storesSource.listS3Buckets() }) { result in
+				switch result {
+				case .none:
+					Text("Loading…")
+				case .some(.failure(let error)):
+					Text("Error: \(error.localizedDescription)")
+				case .some(.success(let buckets)):
+					let bucketNames = buckets.compactMap({ $0.name })
+					List {
+						ForEach(bucketNames, id: \.self) { bucketName in
+							NavigationLink(destination: BucketView.Loader(storesSource: storesSource, bucketName: bucketName)) {
+								Text(bucketName)
 							}
 						}
 					}
@@ -161,36 +173,60 @@ struct ListBucketsView: View {
 	}
 }
 
-struct BucketView: View {
+struct NewBucketObjectFormView: View {
 	@ObservedObject var bucketSource: BucketSource
 	@ObservedObject var vm: BucketViewModel
-	
-	init(bucketSource: BucketSource) {
-		self.bucketSource = bucketSource
-		self.vm = .init(bucketSource: bucketSource)
-	}
-	
-	enum Filter : String {
-		case all
-		case text
-		case image
-		case pdf
-	}
-	
-	@State var filter: Filter = .all
 	
 	struct NewState {
 		var mediaType = MediaType.text(.markdown)
 		var stringContent = ""
 		
 		var content: ContentResource? {
-            ContentResource(mediaType: mediaType, string: stringContent)
+			ContentResource(mediaType: mediaType, string: stringContent)
 		}
 	}
 	@State var newState = NewState()
 	@State var isDropActive = false
 	
-	private var bucketName: String { bucketSource.bucketName }
+	@Environment(\.presentationMode) var presentationMode
+	
+	var body: some View {
+		VStack {
+			Group {
+				Text("Drop file to upload").padding()
+			}
+			.foregroundColor(.white)
+			.background(isDropActive ? Color.purple : Color.blue)
+			.onDrop(of: [UTType.text, UTType.image, UTType.pdf], delegate: Drop(bucketSource: bucketSource))
+			
+			Form {
+				TextEditor(text: $newState.stringContent)
+					.border(.gray, width: 1)
+				
+				Picker("Content Type", selection: $newState.mediaType) {
+					Text("Markdown").tag(MediaType.text(.markdown))
+					Text("Plain text").tag(MediaType.text(.plain))
+					Text("JSON").tag(MediaType.application(.json))
+					Text("JavaScript").tag(MediaType.application(.javascript))
+				}.pickerStyle(.menu)
+				
+				if let content = newState.content {
+					Text(content.id.objectStorageKey)
+						.onTapGesture {
+							if let collectedPressURL = bucketSource.collectedPressRootURL?.appendingPathComponent(content.id.objectStorageKey) {
+								UIPasteboard.general.url = collectedPressURL
+							}
+						}
+				
+					ItemView.DigestSymbolView(digestHex: content.id.sha256DigestHex)
+					
+					Button("Create") {
+						bucketSource.createPublicReadable(content: content)
+					}
+				}
+			}
+		}
+	}
 	
 	struct Drop : DropDelegate {
 		let bucketSource: BucketSource
@@ -198,7 +234,7 @@ struct BucketView: View {
 		func performDrop(info: DropInfo) -> Bool {
 			var count = 0
 			
-            for mediaType in [MediaType.text(.plain), .text(.markdown), .image(.png), .image(.gif), .image(.jpeg), .image(.tiff), .application(.pdf), .application(.json)] {
+			for mediaType in [MediaType.text(.plain), .text(.markdown), .image(.png), .image(.gif), .image(.jpeg), .image(.tiff), .application(.pdf), .application(.json)] {
 				let uti = mediaType.uti!
 				let itemProviders = info.itemProviders(for: [uti])
 				for item in itemProviders {
@@ -219,55 +255,58 @@ struct BucketView: View {
 			return count > 0
 		}
 	}
+}
+
+struct BucketView: View {
+	@ObservedObject var bucketSource: BucketSource
+	@ObservedObject var vm: BucketViewModel
 	
-	private var newFormView: some View {
-		VStack {
-            Group {
-                Text("Drop file to upload").padding()
-            }
-            .foregroundColor(.white)
-            .background(isDropActive ? Color.purple : Color.blue)
-            .onDrop(of: [UTType.text, UTType.image, UTType.pdf], delegate: Drop(bucketSource: bucketSource))
-            
-            Form {
-                TextEditor(text: $newState.stringContent)
-                    .border(.gray, width: 1)
-                
-                Picker("Content Type", selection: $newState.mediaType) {
-                    Text("Markdown").tag(MediaType.text(.markdown))
-                    Text("Plain text").tag(MediaType.text(.plain))
-                    Text("JSON").tag(MediaType.application(.json))
-                    Text("JavaScript").tag(MediaType.application(.javascript))
-                }.pickerStyle(.menu)
-                
-                if let content = newState.content {
-                    Text(content.id.objectStorageKey)
-                        .onTapGesture {
-                            if let collectedPressURL = bucketSource.collectedPressRootURL?.appendingPathComponent(content.id.objectStorageKey) {
-                                UIPasteboard.general.url = collectedPressURL
-                            }
-                        }
-				
-					ItemView.DigestSymbolView(digestHex: content.id.sha256DigestHex)
-                    
-                    Button("Create") {
-                        bucketSource.createPublicReadable(content: content)
-                    }
-                }
-            }
+	init(bucketSource: BucketSource) {
+		self.bucketSource = bucketSource
+		self.vm = .init(bucketSource: bucketSource)
+	}
+	
+	struct Loader: View {
+		let storesSource: StoresSource
+		let bucketName: String
+		
+		var body: some View {
+			AsyncView(loader: {
+				try await storesSource.bucketInCorrectedRegion(name: bucketName)
+			}) { result in
+				switch result {
+				case .some(.success(let value)):
+					BucketView(bucketSource: value)
+				case .some(.failure(let error)):
+					Text("Error loading \(error.localizedDescription)")
+				case .none:
+					Text("Listing bucket…")
+				}
+			}
 		}
 	}
 	
-	var objects: [S3.Object] {
+	enum Filter : String {
+		case all
+		case text
+		case image
+		case pdf
+	}
+	
+	@State var filter: Filter = .all
+	
+	private var bucketName: String { bucketSource.bucketName }
+	
+	var objects: [S3.Object]? {
 		switch filter {
 		case .text:
-			return bucketSource.textObjects ?? []
+			return vm.textObjects
 		case .image:
-			return bucketSource.imageObjects ?? []
+			return vm.imageObjects
 		case .pdf:
-			return bucketSource.pdfObjects ?? []
+			return vm.pdfObjects
 		case .all:
-			return vm.objects ?? []
+			return vm.objects
 		}
 	}
 	
@@ -305,21 +344,19 @@ struct BucketView: View {
 	}
 	
 	func child(key: String) -> some View {
-		AsyncView(action: { return try await loadChild(key: key) }, content: { result in
-			Group {
-				switch result {
-				case .some(.success(let value)):
-					if let value = value {
-						ContentPreview.PreviewView(mediaType: value.mediaType, contentData: value.contentData)
-//						Text("Loaded! \(value.contentData.count)")
-					} else {
-						Text("No data")
-					}
-				case .some(.failure(let error)):
-					Text("Error loading \(error.localizedDescription)")
-				case .none:
-					Text("Loading…")
+		AsyncView(loader: { return try await loadChild(key: key) }, content: { result in
+			switch result {
+			case .some(.success(let value)):
+				if let value = value {
+					ContentPreview.PreviewView(mediaType: value.mediaType, contentData: value.contentData)
+					//						Text("Loaded! \(value.contentData.count)")
+				} else {
+					Text("No data")
 				}
+			case .some(.failure(let error)):
+				Text("Error loading \(error.localizedDescription)")
+			case .none:
+				Text("Loading…")
 			}
 		})
 	}
@@ -335,47 +372,83 @@ struct BucketView: View {
 			
 			BucketInfoView(bucketViewModel: vm)
             
-			List {
-				ForEach(objects, id: \.key) { object in
-//					NavigationLink(destination: ObjectInfoView(object: object, objectSource: bucketSource.useObject(key: object.key ?? ""))) {
-					NavigationLink(destination: child(key: object.key ?? "")) {
-						HStack {
-							ItemView(key: object.key ?? "")
-								.contextMenu {
-                                    Button("Make Public Readable") {
-                                        if let key = object.key {
-                                            bucketSource.makePublicReadable(key: key)
-                                        }
-                                    }
-									Button("Delete") {
-										if let key = object.key {
-											bucketSource.delete(key: key)
+			if let objects = objects {
+				List {
+					ForEach(objects, id: \.key) { object in
+	//					NavigationLink(destination: ObjectInfoView(object: object, objectSource: bucketSource.useObject(key: object.key ?? ""))) {
+						NavigationLink(destination: child(key: object.key ?? "")) {
+							HStack {
+								ItemView(key: object.key ?? "")
+									.contextMenu {
+										Button("Make Public Readable") {
+											if let key = object.key {
+												bucketSource.makePublicReadable(key: key)
+											}
+										}
+										Button("Delete") {
+											if let key = object.key {
+												bucketSource.delete(key: key)
+											}
 										}
 									}
+								Spacer()
+								Text(ByteCountFormatter.string(fromByteCount: object.size ?? 0, countStyle: .file))
+							}
+						}
+					}
+					.onDelete { (indexSet) in
+						guard let objects = bucketSource.objects else { return }
+							
+						for index in indexSet {
+							let object = objects[index]
+							if let key = object.key {
+								print("DELETE!", key)
+								Task {
+									await vm.delete(key: key)
 								}
-							Spacer()
-							Text(ByteCountFormatter.string(fromByteCount: object.size ?? 0, countStyle: .file))
+							}
 						}
 					}
 				}
-				.onDelete { (indexSet) in
-					guard let objects = bucketSource.objects else { return }
-						
-					for index in indexSet {
-						let object = objects[index]
-						if let key = object.key {
-							print("DELETE!", key)
-							bucketSource.delete(key: key)
-						}
-					}
+			} else {
+				VStack {
+					ProgressView()
+					Spacer()
 				}
 			}
-            NavigationLink(destination: newFormView) {
-                Text("Upload")
+			
+            NavigationLink(destination: NewBucketObjectFormView(bucketSource: bucketSource, vm: vm)) {
+                Text("Create")
             }
 		}
 		.navigationBarTitle("\(bucketName) | Load #\(bucketSource.loadClock.counter)")
-		.onAppear(perform: bucketSource.load)
+		.task {
+			print("Load bucket \(filter)")
+			switch filter {
+			case .all:
+				await vm.load()
+			case .text:
+				await vm.loadTexts()
+			case .image:
+				await vm.loadImages()
+			case .pdf:
+				await vm.loadPDFs()
+			}
+		}
+		.onChange(of: filter) { filter in
+			Task.detached {
+				switch filter {
+				case .all:
+					await vm.load()
+				case .text:
+					await vm.loadTexts()
+				case .image:
+					await vm.loadImages()
+				case .pdf:
+					await vm.loadPDFs()
+				}
+			}
+		}
 	}
 }
 

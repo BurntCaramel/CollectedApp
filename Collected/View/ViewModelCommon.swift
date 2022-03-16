@@ -10,20 +10,20 @@ import SwiftUI
 import Combine
 
 struct AsyncView<Value, Content: View>: View {
-	let action: @Sendable () async throws -> Value
+	let loader: @Sendable () async throws -> Value
 	let content: (Result<Value, Error>?) -> Content
 	@State var value: Result<Value, Error>?
 	
-	init(action: @escaping @Sendable () async throws -> Value, content: @escaping (Result<Value, Error>?) -> Content) {
+	init(loader: @escaping @Sendable () async throws -> Value, @ViewBuilder content: @escaping (Result<Value, Error>?) -> Content) {
+		self.loader = loader
 		self.content = content
-		self.action = action
 	}
 	
 	var body: some View {
 		content(value)
 			.task {
 				do {
-					self.value = .success(try await action())
+					self.value = .success(try await loader())
 				}
 				catch (let error) {
 					self.value = .failure(error)
@@ -56,7 +56,7 @@ struct AsyncObjectView<Value, Content: View>: View {
 	let content: (Result<Value, Error>?) -> Content
 	@StateObject var object: AsyncState
 	
-	init(loader: @escaping @Sendable () async throws -> Value, content: @escaping (Result<Value, Error>?) -> Content) {
+	init(loader: @escaping @Sendable () async throws -> Value, @ViewBuilder content: @escaping (Result<Value, Error>?) -> Content) {
 		self.content = content
 		self._object = StateObject(wrappedValue: AsyncState(loader: loader))
 	}

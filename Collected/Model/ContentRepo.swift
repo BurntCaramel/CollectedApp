@@ -57,11 +57,6 @@ class StoresSource: ObservableObject {
 
 class BucketSource : ObservableObject {
 	let bucketName: String
-//	private let s3: S3
-	
-	var collectedPressRootURL: URL? {
-		URL(string: "https://collected.press/1/s3/object/\(producers.s3.region.rawValue)/\(bucketName)/")
-	}
 	
 	fileprivate struct Producers {
 		let bucketName: String
@@ -125,6 +120,11 @@ class BucketSource : ObservableObject {
 			return location.locationConstraint
 		}
 		
+		func list(filter: ListFilter) async throws -> [S3.Object] {
+			let objects = try await s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix))
+			return objects.contents ?? []
+		}
+		
 		func list(region: Region, filter: ListFilter) async throws -> [S3.Object] {
 			let s3 = S3(client: self.s3.client, region: region)
 			let objects = try await s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix))
@@ -133,6 +133,10 @@ class BucketSource : ObservableObject {
 		
 		func getObject(key: String) async throws -> S3.GetObjectOutput {
 			return try await s3.getObject(.init(bucket: bucketName, key: key))
+		}
+		
+		func delete(key: String) async throws -> S3.DeleteObjectOutput {
+			return try await s3.deleteObject(.init(bucket: bucketName, key: key))
 		}
 		
 		func createPublicReadable(content: ContentResource) -> AnyPublisher<S3.PutObjectOutput, Error> {
@@ -177,6 +181,14 @@ class BucketSource : ObservableObject {
 		self.producers = try await .init(bucketName: bucketName, awsClient: awsClient)
 	}
 	
+	var region: Region {
+		producers.s3.region
+	}
+	
+	var collectedPressRootURL: URL? {
+		URL(string: "https://collected.press/1/s3/object/\(region.rawValue)/\(bucketName)/")
+	}
+	
 	@Published var objects: [S3.Object]?
 	let loadClock = LocalClock()
 	private lazy var listCancellable = producers.list(clock: loadClock.$counter, filter: .init(contentType: .all))
@@ -190,6 +202,22 @@ class BucketSource : ObservableObject {
 	
 	func listAll(region: Region) async throws -> [S3.Object] {
 		try await producers.list(region: region, filter: .init(contentType: .all))
+	}
+	
+	func listAll() async throws -> [S3.Object] {
+		try await producers.list(filter: .init(contentType: .all))
+	}
+	
+	func listTexts() async throws -> [S3.Object] {
+		try await producers.list(filter: .init(contentType: .texts))
+	}
+	
+	func listImages() async throws -> [S3.Object] {
+		try await producers.list(filter: .init(contentType: .images))
+	}
+	
+	func listPDFs() async throws -> [S3.Object] {
+		try await producers.list(filter: .init(contentType: .pdfs))
 	}
 	
 	@Published var textObjects: [S3.Object]?
@@ -234,6 +262,10 @@ class BucketSource : ObservableObject {
 	
 	func getObject(key: String) async throws -> S3.GetObjectOutput {
 		try await producers.getObject(key: key)
+	}
+	
+	func delete(key: String) async throws {
+		try await producers.delete(key: key)
 	}
 	
 	func createPublicReadable(content: ContentResource) {
