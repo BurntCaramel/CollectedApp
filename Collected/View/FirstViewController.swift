@@ -10,6 +10,7 @@ import UIKit
 import UniformTypeIdentifiers
 import MobileCoreServices
 import SwiftUI
+import WebKit
 import Combine
 import SotoS3
 import NIO
@@ -107,9 +108,21 @@ class BucketViewModel: ObservableObject {
 	var collectedPressRootURL: URL {
 		URL(string: "https://collected.press/1/s3/object/\(region.rawValue)/\(bucketName)/")!
 	}
+	var collectedPressRootHighlightURL: URL {
+		URL(string: "https://collected.press/1/s3/highlight/\(region.rawValue)/\(bucketName)/")!
+	}
+	var collectedPressRootHighlightURLComponents: URLComponents {
+		URLComponents(string: "https://collected.press/1/s3/highlight/\(region.rawValue)/\(bucketName)/")!
+	}
 	
 	func collectedPressURL(contentID: ContentIdentifier) -> URL {
 		collectedPressRootURL.appendingPathComponent(contentID.objectStorageKey)
+	}
+	func collectedPressHighlightURL(contentID: ContentIdentifier) -> URL {
+		var urlComponents = collectedPressRootHighlightURLComponents
+		urlComponents.path += contentID.objectStorageKey
+		urlComponents.queryItems = [URLQueryItem(name: "theme", value: "1")]
+		return urlComponents.url!
 	}
 	
 	func downloadObject(key: String) async throws -> (mediaType: MediaType, contentData: Data)? {
@@ -424,7 +437,8 @@ struct BucketView: View {
 				if let value = value {
 					let contentID = ContentIdentifier(objectStorageKey: key)
 					let collectedPressURL = contentID.map { vm.collectedPressURL(contentID: $0) }
-					ValidObjectInfoView(key: key, mediaType: value.mediaType, contentData: value.contentData, collectedPressURL: collectedPressURL)
+					let collectedPressHighlightURL = contentID.map { vm.collectedPressHighlightURL(contentID: $0) }
+					ValidObjectInfoView(key: key, mediaType: value.mediaType, contentData: value.contentData, collectedPressURL: collectedPressURL, collectedPressPreviewURL: collectedPressHighlightURL)
 				} else {
 					Text("No data")
 				}
@@ -487,6 +501,7 @@ struct BucketView: View {
 							}
 						}
 					}
+					.listStyle(.plain)
 				}
 			} else {
 				VStack {
@@ -610,17 +625,73 @@ struct ValidObjectInfoView: View {
 	var mediaType: MediaType
 	var contentData: Data
 	var collectedPressURL: URL?
+	var collectedPressPreviewURL: URL?
 
 	var body: some View {
 		VStack {
             if let collectedPressURL = collectedPressURL {
 				Button("Copy Collected.Press URL") {
-                    UIPasteboard.general.url = collectedPressURL
+					let pb = UIPasteboard.general
+					pb.items = [[
+						UTType.plainText.identifier: collectedPressURL.absoluteString,
+						UTType.url.identifier: collectedPressURL
+					]]
+//					pb.string = collectedPressURL.absoluteString
+//                    pb.url = collectedPressURL
                 }
+			}
+			if let collectedPressPreviewURL = collectedPressPreviewURL {
+				NavigationLink(destination: WebPreview(url: collectedPressPreviewURL)) {
+					Text("Collected.Press")
+				}
             }
 
 			ContentPreview.PreviewView(mediaType: mediaType, contentData: contentData)
 		}
 		.navigationBarTitle(key, displayMode: .inline)
+	}
+	
+	struct WebPreview: View {
+		var url: URL
+		
+		var body: some View {
+			VStack {
+				Text(url.absoluteString)
+					.frame(maxWidth: .infinity)
+				
+				WebView(url: url)
+			}
+		}
+	}
+}
+
+struct WebView: UIViewRepresentable {
+	var url: URL
+	
+	// Make a coordinator to co-ordinate with WKWebView's default delegate functions
+//	func makeCoordinator() -> Coordinator {
+//		Coordinator(self)
+//	}
+	
+	func makeUIView(context: Context) -> WKWebView {
+		// Enable javascript in WKWebView to interact with the web app
+		let preferences = WKPreferences()
+//		preferences.allowsContentJavaScript = true
+		
+		let configuration = WKWebViewConfiguration()
+		// Here "iOSNative" is our interface name that we pushed to the website that is being loaded
+//		configuration.userContentController.add(self.makeCoordinator(), name: "iOSNative")
+		configuration.preferences = preferences
+		
+		let webView = WKWebView(frame: CGRect.zero, configuration: configuration)
+//		webView.navigationDelegate = context.coordinator
+		webView.allowsBackForwardNavigationGestures = true
+		webView.scrollView.isScrollEnabled = true
+		webView.scrollView.contentInset = .zero
+	   return webView
+	}
+	
+	func updateUIView(_ webView: WKWebView, context: Context) {
+		webView.load(URLRequest(url: url))
 	}
 }
