@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B211222727E1B796000E902C /* Database.swift in Sources */ = {isa = PBXBuildFile; fileRef = B211222627E1B796000E902C /* Database.swift */; };
 		B2194C7F25477B4900BB0C7E /* Combine+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2194C7E25477B4900BB0C7E /* Combine+Extensions.swift */; };
 		B24B22CE2540179500F0AC16 /* ViewShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24B22CD2540179500F0AC16 /* ViewShared.swift */; };
 		B282A63A253EBE5A003B865C /* ContentRepo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B282A639253EBE5A003B865C /* ContentRepo.swift */; };
@@ -50,6 +51,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B211222627E1B796000E902C /* Database.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Database.swift; sourceTree = "<group>"; };
 		B2194C7E25477B4900BB0C7E /* Combine+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Combine+Extensions.swift"; sourceTree = "<group>"; };
 		B24B22CD2540179500F0AC16 /* ViewShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewShared.swift; sourceTree = "<group>"; };
 		B282A639253EBE5A003B865C /* ContentRepo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentRepo.swift; sourceTree = "<group>"; };
@@ -124,6 +126,7 @@
 				B29517132532BA2400B472A1 /* Settings.swift */,
 				B295171B2532DA2100B472A1 /* Content.swift */,
 				B282A639253EBE5A003B865C /* ContentRepo.swift */,
+				B211222627E1B796000E902C /* Database.swift */,
 			);
 			path = Model;
 			sourceTree = "<group>";
@@ -349,6 +352,7 @@
 				B2194C7F25477B4900BB0C7E /* Combine+Extensions.swift in Sources */,
 				B2FA9CBD25077C4500C32EEC /* FirstViewController.swift in Sources */,
 				B295171C2532DA2100B472A1 /* Content.swift in Sources */,
+				B211222727E1B796000E902C /* Database.swift in Sources */,
 				B2FA9CB925077C4500C32EEC /* AppDelegate.swift in Sources */,
 				B24B22CE2540179500F0AC16 /* ViewShared.swift in Sources */,
 				B29517142532BA2400B472A1 /* Settings.swift in Sources */,
