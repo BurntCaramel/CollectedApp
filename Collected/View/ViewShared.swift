@@ -69,6 +69,28 @@ struct AsyncObjectView<Value, Content: View>: View {
 	}
 }
 
+struct ByteCountView: View {
+	let byteCount: Int64
+	@State private var showLong = false
+	
+	private static var shortFormatter = ByteCountFormatter()
+	private static var longFormatter: ByteCountFormatter = {
+		var f = ByteCountFormatter()
+		f.allowedUnits = .useBytes
+		return f
+	}()
+	
+	var formatter: ByteCountFormatter {
+		return showLong ? Self.longFormatter : Self.shortFormatter
+	}
+	
+	var body: some View {
+		Text(formatter.string(fromByteCount: byteCount))
+			.onTapGesture { showLong.toggle() }
+//			.onHover { showLong = $0 }
+	}
+}
+
 //class LocalClock : ObservableObject {
 //	@Published private(set) var counter = 0
 //	

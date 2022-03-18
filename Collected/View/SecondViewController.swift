@@ -78,6 +78,6 @@ struct AWSSettingsView: View {
 			}
 			Button("Save", action: settingsSource.store)
 		}
-		.navigationBarTitle("AWS Credentials")
+		.navigationTitle("AWS Credentials")
 	}
 }

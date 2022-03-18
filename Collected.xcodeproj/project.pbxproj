@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		B211222727E1B796000E902C /* Database.swift in Sources */ = {isa = PBXBuildFile; fileRef = B211222627E1B796000E902C /* Database.swift */; };
+		B211222927E40D56000E902C /* SQLiteViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B211222827E40D56000E902C /* SQLiteViews.swift */; };
+		B211222D27E40D8C000E902C /* ViewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B211222C27E40D8C000E902C /* ViewModels.swift */; };
 		B2194C7F25477B4900BB0C7E /* Combine+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2194C7E25477B4900BB0C7E /* Combine+Extensions.swift */; };
 		B24B22CE2540179500F0AC16 /* ViewShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24B22CD2540179500F0AC16 /* ViewShared.swift */; };
 		B282A63A253EBE5A003B865C /* ContentRepo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B282A639253EBE5A003B865C /* ContentRepo.swift */; };
@@ -52,6 +54,8 @@
 
 /* Begin PBXFileReference section */
 		B211222627E1B796000E902C /* Database.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Database.swift; sourceTree = "<group>"; };
+		B211222827E40D56000E902C /* SQLiteViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLiteViews.swift; sourceTree = "<group>"; };
+		B211222C27E40D8C000E902C /* ViewModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModels.swift; sourceTree = "<group>"; };
 		B2194C7E25477B4900BB0C7E /* Combine+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Combine+Extensions.swift"; sourceTree = "<group>"; };
 		B24B22CD2540179500F0AC16 /* ViewShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewShared.swift; sourceTree = "<group>"; };
 		B282A639253EBE5A003B865C /* ContentRepo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentRepo.swift; sourceTree = "<group>"; };
@@ -112,10 +116,12 @@
 		B27EAEEA27E0176B00B9259D /* View */ = {
 			isa = PBXGroup;
 			children = (
+				B24B22CD2540179500F0AC16 /* ViewShared.swift */,
+				B211222C27E40D8C000E902C /* ViewModels.swift */,
+				B211222827E40D56000E902C /* SQLiteViews.swift */,
 				B2FA9CBC25077C4500C32EEC /* FirstViewController.swift */,
 				B2FA9CBE25077C4500C32EEC /* SecondViewController.swift */,
 				B2FA9CFC250B4A5500C32EEC /* ContentPreview.swift */,
-				B24B22CD2540179500F0AC16 /* ViewShared.swift */,
 			);
 			path = View;
 			sourceTree = "<group>";
@@ -355,8 +361,10 @@
 				B211222727E1B796000E902C /* Database.swift in Sources */,
 				B2FA9CB925077C4500C32EEC /* AppDelegate.swift in Sources */,
 				B24B22CE2540179500F0AC16 /* ViewShared.swift in Sources */,
+				B211222927E40D56000E902C /* SQLiteViews.swift in Sources */,
 				B29517142532BA2400B472A1 /* Settings.swift in Sources */,
 				B2FA9CFB250A4D9F00C32EEC /* NIO+Combine.swift in Sources */,
+				B211222D27E40D8C000E902C /* ViewModels.swift in Sources */,
 				B2FA9CBB25077C4500C32EEC /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

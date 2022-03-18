@@ -72,138 +72,6 @@ struct StoresView: View {
 	}
 }
 
-@MainActor
-class BucketViewModel: ObservableObject {
-	private var bucket: BucketSource
-	
-	struct Object {
-		let key: String
-		let size: Int64
-		
-		init?(object: S3.Object) {
-			guard let key = object.key, let size = object.size else { return nil }
-			self.key = key
-			self.size = size
-		}
-	}
-	
-	@Published var loadCount = 0
-	@Published var objects: [Object]?
-	@Published var imageObjects: [Object]?
-	@Published var textObjects: [Object]?
-	@Published var pdfObjects: [Object]?
-	@Published var error: Error?
-	
-	/*struct Model {
-		let locationConstraint: S3.BucketLocationConstraint
-		var objects: [S3.Object]
-	}*/
-	
-	init(bucketSource: BucketSource) {
-		self.bucket = bucketSource
-	}
-	
-	var bucketName: String { bucket.bucketName }
-	var region: Region { bucket.region }
-	var collectedPressRootURL: URL {
-		URL(string: "https://collected.press/1/s3/object/\(region.rawValue)/\(bucketName)/")!
-	}
-	var collectedPressRootHighlightURL: URL {
-		URL(string: "https://collected.press/1/s3/highlight/\(region.rawValue)/\(bucketName)/")!
-	}
-	var collectedPressRootHighlightURLComponents: URLComponents {
-		URLComponents(string: "https://collected.press/1/s3/highlight/\(region.rawValue)/\(bucketName)/")!
-	}
-	
-	func collectedPressURL(contentID: ContentIdentifier) -> URL {
-		collectedPressRootURL.appendingPathComponent(contentID.objectStorageKey)
-	}
-	func collectedPressHighlightURL(contentID: ContentIdentifier) -> URL {
-		var urlComponents = collectedPressRootHighlightURLComponents
-		urlComponents.path += contentID.objectStorageKey
-		urlComponents.queryItems = [URLQueryItem(name: "theme", value: "1")]
-		return urlComponents.url!
-	}
-	
-	func downloadObject(key: String) async throws -> (mediaType: MediaType, contentData: Data)? {
-		do {
-			let output = try await bucket.getObject(key: key)
-			guard let mediaType = output.contentType, let contentData = output.body?.asData() else { return nil }
-			return (mediaType: MediaType(string: mediaType), contentData: contentData)
-		}
-		catch (let error) {
-			self.error = error
-			return nil
-		}
-	}
-	
-	func delete(key: String) async {
-		do {
-			let _ = try await bucket.delete(key: key)
-		}
-		catch (let error) {
-			self.error = error
-		}
-	}
-	
-	func load() async {
-		do {
-			print("will reload list")
-			objects = try await bucket.listAll().compactMap(Object.init)
-			print("did reload list")
-			loadCount += 1
-		}
-		catch (let error) {
-			self.error = error
-		}
-	}
-	
-	func loadImages() async {
-		do {
-			imageObjects = try await bucket.listImages().compactMap(Object.init)
-		}
-		catch (let error) {
-			self.error = error
-		}
-	}
-	
-	func loadTexts() async {
-		do {
-			textObjects = try await bucket.listTexts().compactMap(Object.init)
-		}
-		catch (let error) {
-			self.error = error
-		}
-	}
-	
-	func loadPDFs() async {
-		do {
-			pdfObjects = try await bucket.listPDFs().compactMap(Object.init)
-		}
-		catch (let error) {
-			self.error = error
-		}
-	}
-	
-	func createPublicReadable(content: ContentResource) async {
-		do {
-			let _ = try await bucket.createPublicReadable(content: content)
-		}
-		catch (let error) {
-			self.error = error
-		}
-	}
-	
-	func makePublicReadable(key: String) async {
-		do {
-			let _ = try await bucket.makePublicReadable(key: key)
-		}
-		catch (let error) {
-			self.error = error
-		}
-	}
-}
-
 struct BucketInfoView: View {
 	@ObservedObject var bucketViewModel: BucketViewModel
 	
@@ -234,180 +102,7 @@ struct ListBucketsView: View {
 					}
 				}
 			}
-			.navigationBarTitle("Buckets")
-		}
-	}
-}
-
-struct NewBucketObjectSqliteView: View {
-	@MainActor
-	class Model: ObservableObject {
-		private var opened = false
-		private var connection: Database.Connection
-		
-		@Published var exported: Data?
-		@Published var results: [Result<(columnNames: [String], firstRow: [String]), Database.Error>] = []
-//		var lastError: Error? {
-//			guard let result = results.last else { return nil }
-//		}
-		
-		init(databaseData: Data?) {
-			if let databaseData = databaseData {
-				connection = Database.Connection(store: .deserialize(data: databaseData))
-			} else {
-				connection = Database.Connection(store: .memory)
-			}
-		}
-		
-		func open() async {
-			print("OPEN DB")
-			guard opened == false else { return }
-			try? await connection.open()
-			opened = true
-		}
-		
-		func execute(sql: String) async {
-			let statement = Database.Statement(sql: sql)
-			await execute(statement: statement)
-		}
-		
-		func execute(statement: Database.Statement) async {
-			do {
-				let result = try await connection.queryStrings(statement)
-				results.append(.success(result))
-			} catch let error as Database.Error {
-				results.append(.failure(error))
-//				self.lastError = error
-			} catch {}
-		}
-		
-		func export() async {
-			exported = await connection.data
-		}
-	}
-	
-//	let inputDatabaseData: Data?
-	@StateObject var vm: BucketViewModel
-	@StateObject var model: Model
-	@State var statements = "create table blah(id INT PRIMARY KEY NOT NULL, name CHAR(255));"
-	
-	init(vm: BucketViewModel, databaseData: Data? = nil) {
-		_vm = .init(wrappedValue: vm)
-		_model = .init(wrappedValue: Model(databaseData: databaseData))
-	}
-	
-	var body: some View {
-		VStack {
-			Form {
-				TextEditor(text: $statements)
-					.border(.gray, width: 1)
-					.disableAutocorrection(true)
-					.submitLabel(.go)
-					.onSubmit {
-						Task {
-							await model.execute(sql: statements)
-						}
-					}
-				
-				Button("Run") {
-					Task {
-						await model.execute(sql: statements)
-					}
-				}
-				.keyboardShortcut(.defaultAction)
-				
-				HStack {
-				Button("Create Table blah") {
-					Task {
-						await model.execute(sql: "create table blah(id INTEGER PRIMARY KEY NOT NULL, name CHAR(255));")
-						await model.execute(sql: "insert into blah (name) values ('first');")
-					}
-				}
-				
-				Button("Create Table sqlar") {
-					Task {
-						await model.execute(sql: "CREATE TABLE sqlar(name TEXT PRIMARY KEY, mode INT, mtime INT, sz INT, data BLOB);")
-					}
-				}
-				}
-				
-				Button("Show Tables") {
-					Task {
-						await model.execute(sql: "SELECT name FROM sqlite_master WHERE type = \"table\";")
-					}
-				}
-				
-				Button("Dump", action: export)
-				Button("Upload to S3", action: upload)
-				
-				List {
-					ForEach(model.results.indices.lazy.reversed(), id: \.self) { index in
-						HStack {
-							Text("\(index + 1)")
-								.fontWeight(.bold)
-								.foregroundColor(.gray)
-								.frame(minWidth: 40, alignment: .leading)
-							
-							let result = model.results[index]
-							let _ = print(result)
-							switch result {
-							case .success(let result):
-								VStack(alignment: .leading, spacing: 4) {
-									HStack {
-										ForEach(result.columnNames.indices, id: \.self) { column in
-											Text(result.columnNames[column]).fontWeight(.bold)
-										}
-									}
-									HStack {
-										ForEach(result.firstRow.indices, id: \.self) { column in
-											Text(result.firstRow[column])
-										}
-									}
-								}
-								
-							case .failure(let error):
-								Text(error.localizedDescription)
-									.foregroundColor(.red)
-							}
-						}
-					}
-				}
-				
-				if let exported = model.exported {
-					let content = ContentResource(data: exported, mediaType: .application(.sqlite3))
-					Text(content.id.objectStorageKey)
-					
-//					ScrollView {
-//						LazyVGrid(columns: [GridItem(.adaptive(minimum: 10, maximum: 10), spacing: 8, alignment: .topLeading)]) {
-//							ForEach(exported.indices, id: \.self) { index in
-//								Text("\(index)")
-//							}
-//						}
-//					}
-					
-					Text(exported.map({ String(format:"%02x", $0) }).joined())
-						.font(.system(.body, design: .monospaced))
-				}
-			}
-		}
-		.task {
-			await model.open()
-		}
-	}
-	
-	func export() {
-		Task {
-			await model.export()
-			print(model.exported)
-		}
-	}
-	
-	func upload() {
-		Task {
-			await model.export()
-			guard let exported = model.exported else { return }
-			let content = ContentResource(data: exported, mediaType: .application(.sqlite3))
-			await vm.createPublicReadable(content: content)
+			.navigationTitle("Buckets")
 		}
 	}
 }
@@ -465,6 +160,7 @@ struct NewBucketObjectFormView: View {
 				}
 			}
 		}
+		.navigationTitle("Create in \(vm.bucketName)")
 	}
 	
 	@MainActor
@@ -558,6 +254,7 @@ struct BucketView: View {
 	}
 	
 	@State var filter: Filter = .all
+	@State var searchString = ""
 	
 	private var bucketName: String { vm.bucketName }
 	
@@ -612,7 +309,7 @@ struct BucketView: View {
 					let collectedPressURL = contentID.map { vm.collectedPressURL(contentID: $0) }
 					let collectedPressHighlightURL = contentID.map { vm.collectedPressHighlightURL(contentID: $0) }
 					if value.mediaType == .application(.sqlite3) {
-						NewBucketObjectSqliteView(vm: vm, databaseData: value.contentData)
+						NewBucketObjectSqliteView(bucketViewModel: vm, databaseData: value.contentData)
 							.navigationTitle("SQLite3")
 							.navigationSubtitle(key)
 					} else {
@@ -631,13 +328,6 @@ struct BucketView: View {
 	
 	var body: some View {
 		VStack {
-			Picker("Filter", selection: $filter) {
-				Text("Images").tag(Filter.image)
-				Text("Texts").tag(Filter.text)
-				Text("PDFs").tag(Filter.pdf)
-				Text("All").tag(Filter.all)
-            }.pickerStyle(.segmented)
-			
 			if let error = vm.error {
 				Text("Error: \(error.localizedDescription)")
 			}
@@ -651,11 +341,23 @@ struct BucketView: View {
 							HStack {
 								ItemView(key: object.key)
 									.contextMenu {
+										Button("Copy URL") {
+											vm.copyURL(key: object.key)
+										}
+										Button("Share…") {
+											let url = vm.url(key: object.key)
+											let activityController = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+											guard let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive && $0 is UIWindowScene }) else { return }
+											guard let window = (scene as? UIWindowScene)?.keyWindow else { return }
+											window.rootViewController!.present(activityController, animated: true, completion: nil)
+										}
+										Divider()
 										Button("Make Public Readable") {
 											Task {
 												await vm.makePublicReadable(key: object.key)
 											}
 										}
+										Divider()
 										Button("Delete") {
 											Task {
 												await vm.delete(key: object.key)
@@ -664,7 +366,7 @@ struct BucketView: View {
 										}
 									}
 								Spacer()
-								Text(ByteCountFormatter.string(fromByteCount: object.size, countStyle: .file))
+								ByteCountView(byteCount: object.size)
 							}
 						}
 					}
@@ -688,15 +390,9 @@ struct BucketView: View {
 					Spacer()
 				}
 			}
-			
-            NavigationLink(destination: NewBucketObjectFormView(vm: vm)) {
-                Text("Create")
-            }
-			NavigationLink(destination: NewBucketObjectSqliteView(vm: vm)) {
-				Text("Create SQLite")
-			}
 		}
-		.navigationBarTitle(bucketName)
+		.navigationTitle(bucketName)
+		.navigationSubtitle("Region: \(vm.region.rawValue)")
 		.task(id: ObjectIdentifier(vm)) {
 //		.task {
 			print(".task")
@@ -708,6 +404,25 @@ struct BucketView: View {
 				await reload(filter: filter)
 			}
 		}
+		.toolbar {
+			Picker("Filter", selection: $filter) {
+				Text("Images").tag(Filter.image)
+				Text("Texts").tag(Filter.text)
+				Text("PDFs").tag(Filter.pdf)
+				Text("All").tag(Filter.all)
+			}.pickerStyle(.segmented)
+			
+			Spacer()
+			
+			NavigationLink(destination: NewBucketObjectFormView(vm: vm)) {
+				Text("Create")
+			}
+			
+			NavigationLink(destination: NewBucketObjectSqliteView(bucketViewModel: vm)) {
+				Text("Create SQLite")
+			}
+		}
+//		.searchable(text: $searchString)
 	}
 	
 	@MainActor

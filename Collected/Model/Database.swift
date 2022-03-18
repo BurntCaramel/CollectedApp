@@ -96,6 +96,10 @@ enum Database {
 				return data
 			}
 		}
+		
+		func vacuum() throws {
+//			sqlite3_autovacuum_pages(<#T##db: OpaquePointer!##OpaquePointer!#>, <#T##((UnsafeMutableRawPointer?, UnsafePointer<CChar>?, UInt32, UInt32, UInt32) -> UInt32)!##((UnsafeMutableRawPointer?, UnsafePointer<CChar>?, UInt32, UInt32, UInt32) -> UInt32)!##(UnsafeMutableRawPointer?, UnsafePointer<CChar>?, UInt32, UInt32, UInt32) -> UInt32#>, <#T##UnsafeMutableRawPointer!#>, <#T##((UnsafeMutableRawPointer?) -> Void)!##((UnsafeMutableRawPointer?) -> Void)!##(UnsafeMutableRawPointer?) -> Void#>)
+		}
 	}
 	
 	struct Statement : Sendable {

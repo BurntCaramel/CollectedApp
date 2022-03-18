@@ -94,6 +94,10 @@ class BucketSource {
 		self.s3 = s3
 	}
 	
+	var region: Region {
+		s3.region
+	}
+	
 	func list(filter: ListFilter) async throws -> [S3.Object] {
 		let objects = try await s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix))
 		return objects.contents ?? []
@@ -140,8 +144,12 @@ class BucketSource {
 		return try await s3.putObjectAcl(request)
 	}
 	
-	var region: Region {
-		s3.region
+	func url(key: String) -> URL {
+		return URL(string: "https://\(bucketName).s3.\(region).amazonaws.com/\(key)")!
+	}
+	
+	func signedURL(key: String) async throws -> URL {
+		return try await s3.signURL(url: url(key: key), httpMethod: .GET, expires: .hours(24))
 	}
 	
 	var collectedPressRootURL: URL? {

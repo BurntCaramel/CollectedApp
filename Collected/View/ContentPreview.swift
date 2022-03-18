@@ -26,7 +26,7 @@ enum ContentPreview {
 				default:
 					VStack {
 						Text("Can’t preview \(mediaType.string)")
-						Text(ByteCountFormatter().string(fromByteCount: Int64(contentData.count)))
+						ByteCountView(byteCount: Int64(contentData.count))
 					}
 				}
 			}
