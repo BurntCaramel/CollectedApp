@@ -100,6 +100,7 @@ struct ListBucketsView: View {
 							}
 						}
 					}
+					.listStyle(.sidebar)
 				}
 			}
 			.navigationTitle("Buckets")
@@ -128,38 +129,38 @@ struct NewBucketObjectFormView: View {
 			Group {
 				Text("Drop file to upload").padding()
 			}
-			.foregroundColor(.white)
-			.background(isDropActive ? Color.purple : Color.blue)
+			.background(isDropActive ? Color.green : Color.yellow)
 			.onDrop(of: [UTType.text, UTType.image, UTType.pdf], delegate: Drop(vm: vm))
 			
-			Form {
-				TextEditor(text: $newState.stringContent)
-					.border(.gray, width: 1)
+			Picker("Content Type", selection: $newState.mediaType) {
+				Text("Markdown").tag(MediaType.text(.markdown))
+				Text("Plain text").tag(MediaType.text(.plain))
+				Text("HTML").tag(MediaType.text(.html))
+				Text("JSON").tag(MediaType.application(.json))
+				Text("JavaScript").tag(MediaType.application(.javascript))
+			}
+			.pickerStyle(.menu)
+			.frame(maxWidth: 250)
+			
+			TextEditor(text: $newState.stringContent)
+				.border(.gray, width: 1)
+			
+			if let content = newState.content {
+				Text(content.id.objectStorageKey)
+					.onTapGesture {
+						UIPasteboard.general.url = vm.collectedPressURL(contentID: content.id)
+					}
 				
-				Picker("Content Type", selection: $newState.mediaType) {
-					Text("Markdown").tag(MediaType.text(.markdown))
-					Text("Plain text").tag(MediaType.text(.plain))
-					Text("HTML").tag(MediaType.text(.html))
-					Text("JSON").tag(MediaType.application(.json))
-					Text("JavaScript").tag(MediaType.application(.javascript))
-				}.pickerStyle(.menu)
+				ItemView.DigestSymbolView(digestHex: content.id.sha256DigestHex)
 				
-				if let content = newState.content {
-					Text(content.id.objectStorageKey)
-						.onTapGesture {
-							UIPasteboard.general.url = vm.collectedPressURL(contentID: content.id)
-						}
-				
-					ItemView.DigestSymbolView(digestHex: content.id.sha256DigestHex)
-					
-					Button("Create") {
-						Task {
-							await vm.createPublicReadable(content: content)
-						}
+				Button("Create") {
+					Task {
+						await vm.createPublicReadable(content: content)
 					}
 				}
 			}
 		}
+		.padding()
 		.navigationTitle("Create in \(vm.bucketName)")
 	}
 	
@@ -170,7 +171,7 @@ struct NewBucketObjectFormView: View {
 		func performDrop(info: DropInfo) -> Bool {
 			var count = 0
 			
-			for mediaType in [MediaType.text(.plain), .text(.markdown), .image(.png), .image(.gif), .image(.jpeg), .image(.tiff), .application(.pdf), .application(.json)] {
+			for mediaType in [MediaType.text(.plain), .text(.markdown), .text(.html), .text(.json), .application(.javascript), .image(.png), .image(.gif), .image(.jpeg), .image(.tiff), .application(.pdf), .application(.json)] {
 				let uti = mediaType.uti!
 				let itemProviders = info.itemProviders(for: [uti])
 				for item in itemProviders {
@@ -214,19 +215,29 @@ struct BucketView: View {
 				case .some(.success(let value)):
 					BucketView(bucketSource: value)
 				case .some(.failure(let error)):
-					Text("Error loading \(error.localizedDescription)")
+					VStack {
+						let _ = print(error)
+						Text("Error listing bucket \(error.localizedDescription)")
+						Button("Reload", action: load)
+					}
 				case .none:
 					Text("Listing bucket…")
 				}
 			}
 				.task {
-					do {
-						self.result = .success(try await storesSource.bucketInCorrectedRegion(name: bucketName))
-					}
-					catch (let error) {
-						self.result = .failure(error)
-					}
+					load()
 				}
+		}
+		
+		func load() {
+			Task {
+				do {
+					self.result = .success(try await storesSource.bucketInCorrectedRegion(name: bucketName))
+				}
+				catch (let error) {
+					self.result = .failure(error)
+				}
+			}
 		}
 		
 //		var body: some View {
@@ -304,22 +315,35 @@ struct BucketView: View {
 		AsyncView(loader: { return try await vm.downloadObject(key: key) }, content: { result in
 			switch result {
 			case .some(.success(let value)):
-				if let value = value {
+				if let mediaType = value.mediaType, let contentData = value.contentData {
 					let contentID = ContentIdentifier(objectStorageKey: key)
 					let collectedPressURL = contentID.map { vm.collectedPressURL(contentID: $0) }
 					let collectedPressHighlightURL = contentID.map { vm.collectedPressHighlightURL(contentID: $0) }
 					if value.mediaType == .application(.sqlite3) {
 						NewBucketObjectSqliteView(bucketViewModel: vm, databaseData: value.contentData)
 							.navigationTitle("SQLite3")
-							.navigationSubtitle(key)
+//							.navigationSubtitle(key)
 					} else {
-						ValidObjectInfoView(key: key, mediaType: value.mediaType, contentData: value.contentData, collectedPressURL: collectedPressURL, collectedPressPreviewURL: collectedPressHighlightURL)
+						ValidObjectInfoView(key: key, mediaType: mediaType, contentData: contentData, collectedPressURL: collectedPressURL, collectedPressPreviewURL: collectedPressHighlightURL)
 					}
 				} else {
-					Text("No data")
+					VStack {
+						Text("No data")
+						
+						Section("Metadata") {
+							List {
+								ForEach(value.metadata.keys.sorted(), id: \.self) { key in
+									HStack {
+										Text(key)
+										Text(value.metadata[key]!)
+									}
+								}
+							}
+						}
+					}
 				}
 			case .some(.failure(let error)):
-				Text("Error loading \(error.localizedDescription)")
+				Text("Error loading object \(error.localizedDescription)")
 			case .none:
 				Text("Loading…")
 			}
@@ -347,14 +371,41 @@ struct BucketView: View {
 										Button("Share…") {
 											let url = vm.url(key: object.key)
 											let activityController = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-											guard let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive && $0 is UIWindowScene }) else { return }
-											guard let window = (scene as? UIWindowScene)?.keyWindow else { return }
-											window.rootViewController!.present(activityController, animated: true, completion: nil)
+//											guard let vc = keyWindow()?.rootViewController else { return }
+											guard let vc = topMostViewController() else { return }
+											vc.present(activityController, animated: true, completion: nil)
 										}
 										Divider()
 										Button("Make Public Readable") {
 											Task {
 												await vm.makePublicReadable(key: object.key)
+											}
+										}
+										Button("Make Redirect…") {
+											Task {
+												let alert = UIAlertController(title: "title", message: "message", preferredStyle: .alert)
+												alert.title = "Create redirect object"
+												alert.message = "The object will redirect to \(object.key)"
+												
+												alert.addTextField() { textField in
+													textField.placeholder = "Enter new key"
+												}
+												
+												let cancelAction = UIAlertAction(title: "Cancel", style: .cancel) { _ in }
+												alert.addAction(cancelAction)
+												
+												let createAction = UIAlertAction(title: "Create Redirect", style: .default) { _ in
+													guard let newKey = alert.textFields?.first?.text else { return }
+													print("Alert action \(newKey)")
+													Task {
+														await vm.createPublicReadableRedirect(key: newKey, redirectLocation: object.key)
+													}
+												}
+												alert.addAction(createAction)
+												alert.preferredAction = createAction
+												
+												guard let vc = topMostViewController() else { return }
+												vc.present(alert, animated: true)
 											}
 										}
 										Divider()
@@ -383,6 +434,7 @@ struct BucketView: View {
 						}
 					}
 					.listStyle(.plain)
+					.padding(0)
 				}
 			} else {
 				VStack {
@@ -392,7 +444,7 @@ struct BucketView: View {
 			}
 		}
 		.navigationTitle(bucketName)
-		.navigationSubtitle("Region: \(vm.region.rawValue)")
+//		.navigationSubtitle("Region: \(vm.region.rawValue)")
 		.task(id: ObjectIdentifier(vm)) {
 //		.task {
 			print(".task")
@@ -415,7 +467,7 @@ struct BucketView: View {
 			Spacer()
 			
 			NavigationLink(destination: NewBucketObjectFormView(vm: vm)) {
-				Text("Create")
+				Text("Create Text")
 			}
 			
 			NavigationLink(destination: NewBucketObjectSqliteView(bucketViewModel: vm)) {

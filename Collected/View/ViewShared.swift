@@ -9,6 +9,40 @@
 import SwiftUI
 import Combine
 
+func keyWindow() -> UIWindow? {
+	guard let scene = UIApplication.shared.connectedScenes.first(where: {
+		$0.activationState == .foregroundActive && $0 is UIWindowScene
+	}) else {
+		return nil
+	}
+	return (scene as? UIWindowScene)?.keyWindow
+}
+
+// See: https://stackoverflow.com/a/57877120/652615
+func topMostViewController() -> UIViewController? {
+	guard let rootController = keyWindow()?.rootViewController else {
+		return nil
+	}
+	return topMostViewController(for: rootController)
+}
+
+private func topMostViewController(for controller: UIViewController) -> UIViewController {
+	if let presentedController = controller.presentedViewController {
+		return topMostViewController(for: presentedController)
+	} else if let navigationController = controller as? UINavigationController {
+		guard let topController = navigationController.topViewController else {
+			return navigationController
+		}
+		return topMostViewController(for: topController)
+	} else if let tabController = controller as? UITabBarController {
+		guard let topController = tabController.selectedViewController else {
+			return tabController
+		}
+		return topMostViewController(for: topController)
+	}
+	return controller
+}
+
 struct AsyncView<Value, Content: View>: View {
 	let loader: @Sendable () async throws -> Value
 	let content: (Result<Value, Error>?) -> Content

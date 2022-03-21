@@ -94,6 +94,15 @@ class BucketSource {
 		self.s3 = s3
 	}
 	
+	static func local() -> BucketSource {
+		let awsClient = AWSClient(credentialProvider: .configFile(), httpClientProvider: .createNew)
+		return BucketSource(bucketName: "", s3: SotoS3.S3(client: awsClient))
+	}
+	
+	func shutdown() {
+		try? s3.client.syncShutdown()
+	}
+	
 	var region: Region {
 		s3.region
 	}
@@ -131,6 +140,11 @@ class BucketSource {
 		let contentID = content.id
 		let key = contentID.objectStorageKey
 		let request = S3.PutObjectRequest(acl: .publicRead, body: AWSPayload.data(content.data), bucket: bucketName, contentType: contentID.mediaType.string, key: key)
+		return try await s3.putObject(request)
+	}
+	
+	func createPublicReadableRedirect(key: String, redirectLocation: String) async throws -> S3.PutObjectOutput {
+		let request = S3.PutObjectRequest(acl: .publicRead, bucket: bucketName, key: key, metadata: ["x-amz-website-redirect-location": redirectLocation])
 		return try await s3.putObject(request)
 	}
 	

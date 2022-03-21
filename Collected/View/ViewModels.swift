@@ -64,16 +64,15 @@ class BucketViewModel: ObservableObject {
 		return urlComponents.url!
 	}
 	
-	func downloadObject(key: String) async throws -> (mediaType: MediaType, contentData: Data)? {
-		do {
-			let output = try await bucket.getObject(key: key)
-			guard let mediaType = output.contentType, let contentData = output.body?.asData() else { return nil }
-			return (mediaType: MediaType(string: mediaType), contentData: contentData)
-		}
-		catch (let error) {
-			self.error = error
-			return nil
-		}
+	struct DownloadedObject {
+		var mediaType: MediaType?
+		var contentData: Data?
+		var metadata: [String: String]
+	}
+	
+	func downloadObject(key: String) async throws -> DownloadedObject {
+		let output = try await bucket.getObject(key: key)
+		return DownloadedObject(mediaType: output.contentType.map { MediaType(string: $0) }, contentData: output.body?.asData(), metadata: output.metadata ?? [:])
 	}
 	
 	func delete(key: String) async {
@@ -127,6 +126,15 @@ class BucketViewModel: ObservableObject {
 	func createPublicReadable(content: ContentResource) async {
 		do {
 			let _ = try await bucket.createPublicReadable(content: content)
+		}
+		catch (let error) {
+			self.error = error
+		}
+	}
+	
+	func createPublicReadableRedirect(key: String, redirectLocation: String) async {
+		do {
+			let _ = try await bucket.createPublicReadableRedirect(key: key, redirectLocation: redirectLocation)
 		}
 		catch (let error) {
 			self.error = error

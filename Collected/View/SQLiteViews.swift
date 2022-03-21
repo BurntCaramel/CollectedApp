@@ -8,6 +8,7 @@
 
 import Foundation
 import SwiftUI
+import SotoS3
 
 struct NewBucketObjectSqliteView: View {
 	@MainActor
@@ -17,7 +18,7 @@ struct NewBucketObjectSqliteView: View {
 		
 		@Published var tableNames: [String]?
 		@Published var exported: Data?
-		@Published var results: [Result<(columnNames: [String], firstRow: [String]), Database.Error>] = []
+		@Published var outputs: [Database.Statement.ExecutionOutput] = []
 //		var lastError: Error? {
 //			guard let result = results.last else { return nil }
 //		}
@@ -25,36 +26,38 @@ struct NewBucketObjectSqliteView: View {
 		init(databaseData: Data?) {
 			if let databaseData = databaseData {
 				connection = Database.Connection(store: .deserialize(data: databaseData))
+				exported = databaseData
 			} else {
 				connection = Database.Connection(store: .memory)
 			}
 		}
 		
 		func open() async {
-			print("OPEN DB")
 			guard opened == false else { return }
 			try? await connection.open()
 			opened = true
 			
-			do {
-				let result = try await connection.queryStrings(.init(sql: "SELECT name FROM sqlite_master WHERE type = 'table';"))
-				tableNames = result.firstRow
-			} catch {}
+			await refresh()
 		}
 		
 		func execute(sql: String) async {
-			let statement = Database.Statement(sql: sql)
-			await execute(statement: statement)
+			await execute(Database.Statement(sql: sql))
 		}
 		
-		func execute(statement: Database.Statement) async {
+		func execute(_ statement: Database.Statement, with bindings: [Database.Statement.Binding] = []) async {
+			let output = await connection.queryStrings(statement, bindings: bindings)
+			outputs.append(output)
+			
+			await refresh()
+		}
+		
+		private func refresh() async {
 			do {
-				let result = try await connection.queryStrings(statement)
-				results.append(.success(result))
-			} catch let error as Database.Error {
-				results.append(.failure(error))
-//				self.lastError = error
-			} catch {}
+				let output = await connection.queryStrings("SELECT name FROM sqlite_master WHERE type = 'table'")
+				tableNames = try output.result.get().rows.compactMap({ $0.first })
+			} catch let error {
+				print(error)
+			}
 		}
 		
 		func export() async {
@@ -73,18 +76,18 @@ struct NewBucketObjectSqliteView: View {
 	}
 	
 	var body: some View {
-		VStack {
-			Form {
-				TextEditor(text: $statements)
-					.border(.gray, width: 1)
-					.disableAutocorrection(true)
-					.submitLabel(.go)
-					.onSubmit {
-						Task {
-							await model.execute(sql: statements)
-						}
+		VStack(alignment: .leading, spacing: 20) {
+			TextEditor(text: $statements)
+				.border(.gray, width: 1)
+				.disableAutocorrection(true)
+				.submitLabel(.go)
+				.onSubmit {
+					Task {
+						await model.execute(sql: statements)
 					}
-				
+				}
+			
+			HStack {
 				Button("Run") {
 					Task {
 						await model.execute(sql: statements)
@@ -92,109 +95,84 @@ struct NewBucketObjectSqliteView: View {
 				}
 				.keyboardShortcut(.defaultAction)
 				
-				HStack {
-					Button("SQLite Version") {
-						Task {
-							await model.execute(sql: "select sqlite_version();")
-						}
-					}
-					
-					Divider()
-					
-					Button("Create Table blah") {
-						Task {
-							await model.execute(sql: "create table blah(id INTEGER PRIMARY KEY NOT NULL, name CHAR(255));")
-							await model.execute(sql: "insert into blah (name) values ('first');")
-						}
-					}
-					
-					Divider()
-					
-					Button("Create Table sqlar") {
-						Task {
-							await model.execute(sql: "CREATE TABLE sqlar(name TEXT PRIMARY KEY, mode INT, mtime INT, sz INT, data BLOB);")
-						}
-					}
-				}
+				Spacer()
 				
-				if let tableNames = model.tableNames {
+				Menu {
+					Button("SQLite Version", action: querySQLiteVersion)
+					Button("Current Date & Time", action: queryDatetime)
+					Button("Debug Tables", action: queryDebugTables)
+					Divider()
+					Button("Create SQLite Archive table", action: createSQLLiteArchiveTable)
+					
+				} label: {
+					Label("Quickly Run", systemImage: "ellipsis.circle")
+				}
+				.frame(maxWidth: 120)
+			}
+			
+			List {
+				ForEach(model.outputs.indices.lazy.reversed(), id: \.self) { index in
+					let output = model.outputs[index]
+					OutputItem(index: index, output: output)
+				}
+			}
+			.listStyle(.plain)
+			.padding(0)
+			
+			if let tableNames = model.tableNames {
+				Section("Tables") {
 					List {
 						ForEach(tableNames, id: \.self) { tableName in
 							Text(tableName)
 						}
 					}
+					.listStyle(.plain)
+					.padding(0)
 				}
-				
-				Button("Show Tables") {
-					Task {
-						await model.execute(sql: "SELECT name FROM sqlite_master WHERE type = \"table\";")
-					}
-				}
-				
-				Button("Dump", action: export)
-				Button("Upload to S3", action: upload)
-				
-				List {
-					ForEach(model.results.indices.lazy.reversed(), id: \.self) { index in
-						HStack {
-							Text("\(index + 1)")
-								.fontWeight(.bold)
-								.foregroundColor(.gray)
-								.frame(minWidth: 40, alignment: .leading)
-							
-							let result = model.results[index]
-							let _ = print(result)
-							switch result {
-							case .success(let result):
-								VStack(alignment: .leading, spacing: 4) {
-									HStack {
-										ForEach(result.columnNames.indices, id: \.self) { column in
-											Text(result.columnNames[column]).fontWeight(.bold)
-										}
-									}
-									HStack {
-										ForEach(result.firstRow.indices, id: \.self) { column in
-											Text(result.firstRow[column])
-										}
-									}
-								}
-								
-							case .failure(let error):
-								Text(error.localizedDescription)
-									.foregroundColor(.red)
-							}
-						}
-					}
-				}
-				
-				if let exported = model.exported {
-					let content = ContentResource(data: exported, mediaType: .application(.sqlite3))
-					Text(content.id.objectStorageKey)
-					
-					ByteCountView(byteCount: Int64(exported.count))
-					
-//					ScrollView {
-//						LazyVGrid(columns: [GridItem(.adaptive(minimum: 10, maximum: 10), spacing: 8, alignment: .topLeading)]) {
-//							ForEach(exported.indices, id: \.self) { index in
-//								Text("\(index)")
-//							}
-//						}
-//					}
-					
-					Text(exported.map({ String(format:"%02x", $0) }).joined())
-						.font(.system(.body, design: .monospaced))
+			}
+			
+			if let exported = model.exported {
+				NavigationLink(destination: DatabaseDump(data: exported)) {
+					Text("View Snapshot Data")
 				}
 			}
 		}
+		.padding()
 		.task {
 			await model.open()
 		}
+		.toolbar {
+			Button("Snapshot", action: snapshot)
+			Button("Upload to S3", action: upload)
+		}
+		.navigationTitle("SQLite")
 	}
 	
-	func export() {
+	private func execute(sql: String) {
+		Task {
+			await model.execute(sql: sql)
+		}
+	}
+	
+	func querySQLiteVersion() {
+		execute(sql: "select sqlite_version()")
+	}
+	
+	func queryDatetime() {
+		execute(sql: "select datetime()")
+	}
+	
+	func queryDebugTables() {
+		execute(sql: "SELECT * FROM sqlite_master WHERE type = 'table'")
+	}
+	
+	func createSQLLiteArchiveTable() {
+		execute(sql: "CREATE TABLE sqlar(name TEXT PRIMARY KEY, mode INT, mtime INT, sz INT, data BLOB)")
+	}
+	
+	func snapshot() {
 		Task {
 			await model.export()
-			print(model.exported)
 		}
 	}
 	
@@ -206,5 +184,84 @@ struct NewBucketObjectSqliteView: View {
 			await bucketViewModel.createPublicReadable(content: content)
 		}
 	}
+	
+	struct OutputItem: View {
+		let index: Int
+		let output: Database.Statement.ExecutionOutput
+		
+		var body: some View {
+			DisclosureGroup {
+				Text(output.input.statement.sql)
+					.font(.system(.body, design: .monospaced))
+			} label: {
+				Text("\(index + 1)")
+					.fontWeight(.bold)
+					.foregroundColor(.gray)
+					.frame(minWidth: 40, alignment: .center)
+				
+				switch output.result {
+				case .success(let result):
+					LazyVGrid(
+						columns: result.columnNames.map { _ in
+							GridItem(.flexible(minimum: 10, maximum: 200), spacing: 4, alignment: .leading)
+						},
+						alignment: .leading,
+						spacing: 8
+					) {
+						ForEach(result.columnNames.indices, id: \.self) { column in
+							Text(result.columnNames[column]).fontWeight(.bold)
+								.id(-1 * (column + 1))
+						}
+						
+						ForEach(result.rows.indices, id: \.self) { row in
+							ForEach(result.rows[row].indices, id: \.self) { column in
+								Text(result.rows[row][column])
+									.id(row * result.columnNames.count + column)
+							}
+						}
+					}
+					.layoutPriority(1)
+					
+				case .failure(let error):
+					Text(error.localizedDescription)
+						.foregroundColor(.red)
+				}
+			}
+		}
+	}
+	
+	struct DatabaseDump: View {
+		let data: Data
+		
+		var body: some View {
+			let content = ContentResource(data: data, mediaType: .application(.sqlite3))
+			Text(content.id.objectStorageKey)
+			
+			ByteCountView(byteCount: Int64(data.count))
+			
+//					ScrollView {
+//						LazyVGrid(columns: [GridItem(.adaptive(minimum: 10, maximum: 10), spacing: 8, alignment: .topLeading)]) {
+//							ForEach(exported.indices, id: \.self) { index in
+//								Text("\(index)")
+//							}
+//						}
+//					}
+			
+			ScrollView {
+				Text(data.map({ String(format:"%02x", $0) }).joined())
+					.font(.system(.body, design: .monospaced))
+					.textSelection(.enabled)
+			}
+		}
+	}
 }
 
+struct ContentView_Previews: PreviewProvider {
+	static var previews: some View {
+		NewBucketObjectSqliteView(bucketViewModel: BucketViewModel(bucketSource: BucketSource.local()))
+			.previewDevice("iPhone 8")
+			.previewLayout(PreviewLayout.device)
+			.padding()
+			.previewDisplayName("iPhone 8")
+	}
+}

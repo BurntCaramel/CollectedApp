@@ -14,6 +14,20 @@ enum Database {
 		case couldNotOpenDatabase(String?)
 		case couldNotPrepareStatement(String?)
 		case couldNotExecuteStatement(String?)
+		case expectedNextRow
+		
+		var localizedDescription: String {
+			switch self {
+			case .couldNotOpenDatabase(let message):
+				return "Could not open database: \(message ?? "")"
+			case .couldNotPrepareStatement(let message):
+				return "Could not prepare database statement: \(message ?? "")"
+			case .couldNotExecuteStatement(let message):
+				return "Could not execute database statement: \(message ?? "")"
+			case .expectedNextRow:
+				return "Expected another row"
+			}
+		}
 	}
 	
 	enum DatabaseStore {
@@ -113,12 +127,12 @@ extension Database.Statement : ExpressibleByStringLiteral {
 	}
 }
 
-extension Database.Connection {
-	enum StatementBinding : ExpressibleByStringLiteral, ExpressibleByIntegerLiteral {
+extension Database.Statement {
+	enum Binding : ExpressibleByStringLiteral, ExpressibleByIntegerLiteral {
 		case int32(_ value: Int32)
 		case string(_ value: String)
 		
-		func apply(statementInstance: OpaquePointer, offset: Int32) {
+		fileprivate func apply(statementInstance: OpaquePointer, offset: Int32) {
 			switch self {
 			case .int32(let value):
 				sqlite3_bind_int(statementInstance, offset, value)
@@ -136,12 +150,25 @@ extension Database.Connection {
 		}
 	}
 	
-	struct StatementExecution {
+	struct ExecutionSuccessfulOutput {
+		var rowsModified: Int
+		var columnNames: [String]
+		var rows: [[String]]
+	}
+	
+	struct ExecutionOutput {
+		var input: (statement: Database.Statement, bindings: [Database.Statement.Binding])
+		var result: Result<ExecutionSuccessfulOutput, Database.Error>
+	}
+}
+
+extension Database.Connection {
+	private struct StatementExecution {
 		private let db: OpaquePointer?;
 		private let conn: Database.Connection
 		private let statementInstance: OpaquePointer;
 		
-		init(statement: Database.Statement, conn: isolated Database.Connection, bindings: [StatementBinding]) throws {
+		init(statement: Database.Statement, conn: isolated Database.Connection, bindings: [Database.Statement.Binding]) throws {
 			self.conn = conn
 			self.db = conn.db
 			
@@ -167,6 +194,10 @@ extension Database.Connection {
 			return Database.Connection.errorMessage(db: db)
 		}
 		
+		var rowsModified: Int {
+			return Int(sqlite3_changes(db))
+		}
+		
 		func singleStep() throws {
 			guard sqlite3_step(statementInstance) == SQLITE_DONE else {
 //				sqlite3_errmsg(conn.db)
@@ -180,6 +211,12 @@ extension Database.Connection {
 			}
 			
 			return true
+		}
+		
+		func checkNextRow() throws {
+			if false == nextRow() {
+				throw Database.Error.expectedNextRow
+			}
 		}
 		
 		subscript(columnName column: Int32) -> String? {
@@ -216,7 +253,7 @@ extension Database.Connection {
 		}
 	}
 	
-	func execute(_ statement: Database.Statement, bindings: StatementBinding...) throws {
+	func execute(_ statement: Database.Statement, bindings: Database.Statement.Binding...) throws {
 		let execution = try StatementExecution(statement: statement, conn: self, bindings: bindings)
 		defer {
 			execution.close()
@@ -225,27 +262,27 @@ extension Database.Connection {
 		try execution.singleStep()
 	}
 	
-	func queryInt32(_ statement: Database.Statement, bindings: StatementBinding...) throws -> Int32 {
+	func queryInt32(_ statement: Database.Statement, bindings: Database.Statement.Binding...) throws -> Int32 {
 		let execution = try StatementExecution(statement: statement, conn: self, bindings: bindings)
 		defer {
 			execution.close()
 		}
 		
-		try execution.nextRow()
+//		try execution.checkNextRow()
 		return execution[int: 0]
 	}
 	
-	func queryString(_ statement: Database.Statement, bindings: StatementBinding...) throws -> String? {
+	func queryString(_ statement: Database.Statement, bindings: Database.Statement.Binding...) throws -> String? {
 		let execution = try StatementExecution(statement: statement, conn: self, bindings: bindings)
 		defer {
 			execution.close()
 		}
 		
-		try execution.nextRow()
+//		try execution.checkNextRow()
 		return execution[string: 0]
 	}
 	
-	func queryStrings(_ statement: Database.Statement, bindings: StatementBinding...) throws -> (columnNames: [String], firstRow: [String]) {
+	private func queryStrings(_ statement: Database.Statement, bindings: [Database.Statement.Binding]) throws -> Database.Statement.ExecutionSuccessfulOutput {
 		let execution = try StatementExecution(statement: statement, conn: self, bindings: bindings)
 		defer {
 			execution.close()
@@ -255,13 +292,34 @@ extension Database.Connection {
 		print(execution.columnNames())
 		
 		let columnNames = execution.columnNames()
-		try execution.nextRow()
-		let firstRow = execution.valuesText()
-		return (columnNames: columnNames, firstRow: firstRow)
+		var rows: [[String]] = []
+		while execution.nextRow() {
+			rows.append(execution.valuesText())
+		}
+		
+		return Database.Statement.ExecutionSuccessfulOutput(rowsModified: execution.rowsModified, columnNames: columnNames, rows: rows)
 	}
 	
-	func nextRow(execution: StatementExecution) -> [String]? {
-		guard try execution.nextRow() else { return nil }
+	func queryStrings(_ statement: Database.Statement, bindings: [Database.Statement.Binding] = []) -> Database.Statement.ExecutionOutput {
+		let input = (statement: statement, bindings: bindings)
+		do {
+			let output: Database.Statement.ExecutionSuccessfulOutput = try queryStrings(statement, bindings: bindings)
+			return .init(input: input, result: .success(output))
+		}
+		catch let error as Database.Error {
+			return .init(input: input, result: .failure(error))
+		}
+		catch {
+			fatalError("Expected error of type Database.Error")
+		}
+	}
+	
+//	func queryStrings(_ statement: Database.Statement, bindings: Database.Statement.Binding...) -> Database.Statement.ExecutionOutput {
+//		return try queryStrings(statement, bindings: bindings)
+//	}
+	
+	private func nextRow(execution: StatementExecution) -> [String]? {
+		guard execution.nextRow() else { return nil }
 		return execution.valuesText()
 	}
 	
@@ -270,10 +328,10 @@ extension Database.Connection {
 		
 		private let conn: Database.Connection
 		private let statement: Database.Statement
-		private let bindings: [StatementBinding]
+		private let bindings: [Database.Statement.Binding]
 		private var execution: StatementExecution?
 		
-		init(conn: Database.Connection, statement: Database.Statement, bindings: [StatementBinding]) {
+		init(conn: Database.Connection, statement: Database.Statement, bindings: [Database.Statement.Binding]) {
 			self.conn = conn
 			self.statement = statement
 			self.bindings = bindings
@@ -303,7 +361,7 @@ extension Database.Connection {
 		}
 	}
 	
-	nonisolated func queryRowsText(_ statement: Database.Statement, bindings: StatementBinding...) -> QueryIterable {
+	nonisolated func queryRowsText(_ statement: Database.Statement, bindings: Database.Statement.Binding...) -> QueryIterable {
 		return QueryIterable(conn: self, statement: statement, bindings: bindings)
 	}
 }
