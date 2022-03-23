@@ -7,7 +7,8 @@
 //
 
 import SwiftUI
-import Combine
+import WebKit
+import PDFKit
 
 func keyWindow() -> UIWindow? {
 	guard let scene = UIApplication.shared.connectedScenes.first(where: {
@@ -124,6 +125,51 @@ struct ByteCountView: View {
 //			.onHover { showLong = $0 }
 	}
 }
+
+struct WebView: UIViewRepresentable {
+	var url: URL
+	
+	// Make a coordinator to co-ordinate with WKWebView's default delegate functions
+//	func makeCoordinator() -> Coordinator {
+//		Coordinator(self)
+//	}
+	
+	func makeUIView(context: Context) -> WKWebView {
+		// Enable javascript in WKWebView to interact with the web app
+		let preferences = WKPreferences()
+//		preferences.allowsContentJavaScript = true
+		
+		let configuration = WKWebViewConfiguration()
+		// Here "iOSNative" is our interface name that we pushed to the website that is being loaded
+//		configuration.userContentController.add(self.makeCoordinator(), name: "iOSNative")
+		configuration.preferences = preferences
+		
+		let webView = WKWebView(frame: CGRect.zero, configuration: configuration)
+//		webView.navigationDelegate = context.coordinator
+		webView.allowsBackForwardNavigationGestures = true
+		webView.scrollView.isScrollEnabled = true
+		webView.scrollView.contentInset = .zero
+	   return webView
+	}
+	
+	func updateUIView(_ webView: WKWebView, context: Context) {
+		webView.load(URLRequest(url: url))
+	}
+}
+
+struct PDFView: UIViewRepresentable {
+	var data: Data
+	
+	func makeUIView(context: Context) -> PDFKit.PDFView {
+		return PDFKit.PDFView()
+	}
+	
+	func updateUIView(_ view: PDFKit.PDFView, context: Context) {
+		let document = PDFDocument(data: data)
+		view.document = document
+	}
+}
+
 
 //class LocalClock : ObservableObject {
 //	@Published private(set) var counter = 0

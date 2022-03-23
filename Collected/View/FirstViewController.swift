@@ -10,7 +10,6 @@ import UIKit
 import UniformTypeIdentifiers
 import MobileCoreServices
 import SwiftUI
-import WebKit
 import Combine
 import SotoS3
 import NIO
@@ -151,7 +150,8 @@ struct NewBucketObjectFormView: View {
 						UIPasteboard.general.url = vm.collectedPressURL(contentID: content.id)
 					}
 				
-				ItemView.DigestSymbolView(digestHex: content.id.sha256DigestHex)
+				//ItemView.DigestSymbolView(digestHex: content.id.sha256DigestHex)
+				ItemView.DigestEmojidView(digestHex: content.id.sha256DigestHex)
 				
 				Button("Create") {
 					Task {
@@ -284,33 +284,6 @@ struct BucketView: View {
 		}
 	}
 	
-	struct DigestEmojidView: View {
-		var digestHex: String
-		
-		let hexToEmoji: Dictionary<Character, String> = [
-			"0": "⚡️", "1": "💩", "2": "💋", "3": "🦁", "4": "🐧", "5": "🦄", "6": "🐝", "7": "🐙", "8": "🌵", "9": "🍇", "a": "🍫", "b": "🎈", "c": "⛄", "d": "⛵️", "e": "🚲", "f": "👠"
-		]
-		
-		var emojid: [String]? {
-			let emojis = digestHex.prefix(7).compactMap{ hexToEmoji[$0] }
-			guard emojis.count == 7 else { return nil }
-			return emojis
-		}
-		
-		var body: some View {
-			if let emojid = emojid {
-				HStack(alignment: /*@START_MENU_TOKEN@*/.center/*@END_MENU_TOKEN@*/, spacing: nil) {
-					ForEach(emojid.indices) { index in
-						Text(emojid[index]).font(index <= 3 ? .title2 : .body)
-					}
-				}
-//				Text(emojid).font(.body).help(digestHex)
-			} else {
-				Text(digestHex).font(.caption)
-			}
-		}
-	}
-	
 	func child(key: String) -> some View {
 		AsyncView(loader: { return try await vm.downloadObject(key: key) }, content: { result in
 			switch result {
@@ -320,7 +293,7 @@ struct BucketView: View {
 					let collectedPressURL = contentID.map { vm.collectedPressURL(contentID: $0) }
 					let collectedPressHighlightURL = contentID.map { vm.collectedPressHighlightURL(contentID: $0) }
 					if value.mediaType == .application(.sqlite3) {
-						NewBucketObjectSqliteView(bucketViewModel: vm, databaseData: value.contentData)
+						BucketObjectSqliteView(bucketViewModel: vm, databaseData: value.contentData)
 							.navigationTitle("SQLite3")
 //							.navigationSubtitle(key)
 					} else {
@@ -470,7 +443,7 @@ struct BucketView: View {
 				Text("Create Text")
 			}
 			
-			NavigationLink(destination: NewBucketObjectSqliteView(bucketViewModel: vm)) {
+			NavigationLink(destination: BucketObjectSqliteView(bucketViewModel: vm)) {
 				Text("Create SQLite")
 			}
 		}
@@ -506,6 +479,7 @@ struct ItemView: View {
 	var values: Optional<(imageName: String, text: String, contentIdentifier: ContentIdentifier)> {
 		guard let contentIdentifier = contentIdentifier else { return nil }
 		switch contentIdentifier.mediaType {
+		case .text(.html): return (imageName: "doc.richtext", text: "html", contentIdentifier: contentIdentifier)
 		case .text(let textType): return (imageName: "doc.plaintext", text: textType.rawValue, contentIdentifier: contentIdentifier)
 		case .image(let imageType): return (imageName: "photo", text: imageType.rawValue, contentIdentifier: contentIdentifier)
 		case .application(.pdf): return (imageName: "doc.richtext", text: "pdf", contentIdentifier: contentIdentifier)
@@ -520,11 +494,40 @@ struct ItemView: View {
 		if let values = self.values {
 			HStack {
 				Image(systemName: values.imageName)
-				Text(values.text).textCase(.uppercase).font(.body)
-				DigestSymbolView(digestHex: values.contentIdentifier.sha256DigestHex)
+				Text(values.text).font(.body.smallCaps())
+				DigestEmojidView(digestHex: values.contentIdentifier.sha256DigestHex)
+//				DigestSymbolView(digestHex: values.contentIdentifier.sha256DigestHex)
 			}
 		} else {
 			Text(key)
+		}
+	}
+	
+	struct DigestEmojidView: View {
+		var digestHex: String
+		
+		let hexToEmoji: Dictionary<Character, String> = [
+			"0": "⚡️", "1": "💩", "2": "💋", "3": "🦁", "4": "🐧", "5": "🦄", "6": "🐝", "7": "🐙", "8": "🌵", "9": "🍇", "a": "🍫", "b": "🎈", "c": "⛄", "d": "⛵️", "e": "🚲", "f": "👠"
+		]
+		
+		var emojid: [String]? {
+			let emojis = digestHex.prefix(7).compactMap{ hexToEmoji[$0] }
+			guard emojis.count == 7 else { return nil }
+			return emojis
+		}
+		
+		var body: some View {
+			if let emojid = emojid {
+				HStack(alignment: /*@START_MENU_TOKEN@*/.center/*@END_MENU_TOKEN@*/, spacing: nil) {
+					ForEach(emojid.indices) { index in
+						let font = index <= 3 ? Font.title2 : Font.caption
+						Text(emojid[index]).font(font)
+					}
+				}
+//				Text(emojid).font(.body).help(digestHex)
+			} else {
+				Text(digestHex).font(.caption)
+			}
 		}
 	}
 	
@@ -612,36 +615,5 @@ struct ValidObjectInfoView: View {
 				WebView(url: url)
 			}
 		}
-	}
-}
-
-struct WebView: UIViewRepresentable {
-	var url: URL
-	
-	// Make a coordinator to co-ordinate with WKWebView's default delegate functions
-//	func makeCoordinator() -> Coordinator {
-//		Coordinator(self)
-//	}
-	
-	func makeUIView(context: Context) -> WKWebView {
-		// Enable javascript in WKWebView to interact with the web app
-		let preferences = WKPreferences()
-//		preferences.allowsContentJavaScript = true
-		
-		let configuration = WKWebViewConfiguration()
-		// Here "iOSNative" is our interface name that we pushed to the website that is being loaded
-//		configuration.userContentController.add(self.makeCoordinator(), name: "iOSNative")
-		configuration.preferences = preferences
-		
-		let webView = WKWebView(frame: CGRect.zero, configuration: configuration)
-//		webView.navigationDelegate = context.coordinator
-		webView.allowsBackForwardNavigationGestures = true
-		webView.scrollView.isScrollEnabled = true
-		webView.scrollView.contentInset = .zero
-	   return webView
-	}
-	
-	func updateUIView(_ webView: WKWebView, context: Context) {
-		webView.load(URLRequest(url: url))
 	}
 }

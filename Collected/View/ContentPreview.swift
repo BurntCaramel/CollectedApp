@@ -23,6 +23,8 @@ enum ContentPreview {
 					ImagePreview(contentData: contentData)
                 case .application(.json), .application(.javascript):
                     TextPreview(contentData: contentData)
+				case .application(.pdf):
+					PDFView(data: contentData)
 				default:
 					VStack {
 						Text("Can’t preview \(mediaType.string)")

@@ -153,7 +153,7 @@ extension Database.Statement {
 	struct ExecutionSuccessfulOutput {
 		var rowsModified: Int
 		var columnNames: [String]
-		var rows: [[String]]
+		var rows: [[String?]]
 	}
 	
 	struct ExecutionOutput {
@@ -241,13 +241,13 @@ extension Database.Connection {
 			}
 		}
 		
-		func valuesText() -> [String] {
+		func valuesText() -> [String?] {
 			let count = sqlite3_data_count(statementInstance)
 			return (0..<count).map {
 				if let pointer = sqlite3_column_text(statementInstance, $0) {
 					return String(cString: pointer)
 				} else {
-					return "[nil]"
+					return nil
 				}
 			}
 		}
@@ -292,7 +292,7 @@ extension Database.Connection {
 		print(execution.columnNames())
 		
 		let columnNames = execution.columnNames()
-		var rows: [[String]] = []
+		var rows: [[String?]] = []
 		while execution.nextRow() {
 			rows.append(execution.valuesText())
 		}
@@ -318,13 +318,13 @@ extension Database.Connection {
 //		return try queryStrings(statement, bindings: bindings)
 //	}
 	
-	private func nextRow(execution: StatementExecution) -> [String]? {
+	private func nextRow(execution: StatementExecution) -> [String?]? {
 		guard execution.nextRow() else { return nil }
 		return execution.valuesText()
 	}
 	
 	struct QueryIterable : AsyncSequence, AsyncIteratorProtocol {
-		typealias Element = [String]
+		typealias Element = [String?]
 		
 		private let conn: Database.Connection
 		private let statement: Database.Statement
@@ -337,7 +337,7 @@ extension Database.Connection {
 			self.bindings = bindings
 		}
 		
-		mutating func next() async throws -> [String]? {
+		mutating func next() async throws -> [String?]? {
 			try Task.checkCancellation()
 			
 			if let execution = execution {

@@ -10,7 +10,7 @@ import Foundation
 import SwiftUI
 import SotoS3
 
-struct NewBucketObjectSqliteView: View {
+struct BucketObjectSqliteView: View {
 	@MainActor
 	class Model: ObservableObject {
 		private var opened = false
@@ -54,7 +54,10 @@ struct NewBucketObjectSqliteView: View {
 		private func refresh() async {
 			do {
 				let output = await connection.queryStrings("SELECT name FROM sqlite_master WHERE type = 'table'")
-				tableNames = try output.result.get().rows.compactMap({ $0.first })
+				tableNames = try output.result.get().rows.compactMap({
+					guard let first = $0.first else { return nil }
+					return first
+				})
 			} catch let error {
 				print(error)
 			}
@@ -215,7 +218,9 @@ struct NewBucketObjectSqliteView: View {
 						
 						ForEach(result.rows.indices, id: \.self) { row in
 							ForEach(result.rows[row].indices, id: \.self) { column in
-								Text(result.rows[row][column])
+								let value = result.rows[row][column]
+								Text(value ?? "null")
+									.opacity(value == nil ? 0.5 : 1)
 									.id(row * result.columnNames.count + column)
 							}
 						}
@@ -258,7 +263,7 @@ struct NewBucketObjectSqliteView: View {
 
 struct ContentView_Previews: PreviewProvider {
 	static var previews: some View {
-		NewBucketObjectSqliteView(bucketViewModel: BucketViewModel(bucketSource: BucketSource.local()))
+		BucketObjectSqliteView(bucketViewModel: BucketViewModel(bucketSource: BucketSource.local()))
 			.previewDevice("iPhone 8")
 			.previewLayout(PreviewLayout.device)
 			.padding()
