@@ -47,6 +47,8 @@ enum MediaType : Hashable {
 		case javascript
 		case pdf
 		case zip
+		case gzip
+		case epub = "epub+zip"
 		case sqlite3 = "vnd.sqlite3"
 		case fontWoff = "font-woff"
 		case octetStream = "octet-stream"
@@ -134,6 +136,8 @@ enum MediaType : Hashable {
 			case .json: return .json
 			case .rss: return .xml
 			case .zip: return .zip
+			case .gzip: return .gzip
+			case .epub: return .epub
 			case .sqlite3: return .database
 			case .fontWoff: return .data
 			case .wasm: return .data
