@@ -72,6 +72,7 @@ class BucketSource {
 			case texts
 			case images
 			case pdfs
+			case sqlite
 			
 			var prefix: String? {
 				switch self {
@@ -82,7 +83,9 @@ class BucketSource {
 				case .images:
 					return "sha256/image/"
 				case .pdfs:
-					return "sha256/application/pdf/"
+					return "sha256/\(MediaType.application(.pdf))/"
+				case .sqlite:
+					return "sha256/\(MediaType.application(.sqlite3))/"
 				}
 			}
 		}
@@ -108,6 +111,7 @@ class BucketSource {
 	}
 	
 	func list(filter: ListFilter) async throws -> [S3.Object] {
+		print("PREFIX \(filter.contentType.prefix)")
 		let objects = try await s3.listObjectsV2(.init(bucket: bucketName, prefix: filter.contentType.prefix))
 		return objects.contents ?? []
 	}
@@ -126,6 +130,10 @@ class BucketSource {
 	
 	func listPDFs() async throws -> [S3.Object] {
 		try await list(filter: .init(contentType: .pdfs))
+	}
+	
+	func listSQLiteDatabases() async throws -> [S3.Object] {
+		try await list(filter: .init(contentType: .sqlite))
 	}
 	
 	func getObject(key: String) async throws -> S3.GetObjectOutput {

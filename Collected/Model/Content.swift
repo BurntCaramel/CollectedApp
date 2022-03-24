@@ -12,7 +12,7 @@ import UniformTypeIdentifiers
 
 // See: https://github.com/onevcat/MimeType/blob/master/Sources/MimeType.swift
 
-enum MediaType : Hashable {
+enum MediaType : Hashable, CustomStringConvertible {
 	enum Base : String {
 		case text
 		case image
@@ -107,6 +107,8 @@ enum MediaType : Hashable {
 			return ""
 		}
 	}
+	
+	var description: String { string }
 	
 	var uti: UTType? {
 		switch self {

@@ -262,6 +262,7 @@ struct BucketView: View {
 		case text
 		case image
 		case pdf
+		case sqlite
 	}
 	
 	@State var filter: Filter = .all
@@ -278,6 +279,8 @@ struct BucketView: View {
 			return vm.imageObjects
 		case .pdf:
 			return vm.pdfObjects
+		case .sqlite:
+			return vm.sqliteObjects
 		case .all:
 			print("use all objects \(vm.objects != nil)")
 			return vm.objects
@@ -434,6 +437,7 @@ struct BucketView: View {
 				Text("Images").tag(Filter.image)
 				Text("Texts").tag(Filter.text)
 				Text("PDFs").tag(Filter.pdf)
+				Text("SQLite").tag(Filter.sqlite)
 				Text("All").tag(Filter.all)
 			}.pickerStyle(.segmented)
 			
@@ -462,6 +466,8 @@ struct BucketView: View {
 			await vm.loadImages()
 		case .pdf:
 			await vm.loadPDFs()
+		case .sqlite:
+			await vm.loadSQLiteDatabases()
 		}
 	}
 	

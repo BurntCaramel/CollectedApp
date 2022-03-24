@@ -66,6 +66,18 @@ struct BucketObjectSqliteView: View {
 		func export() async {
 			exported = await connection.data
 		}
+		
+		struct Querier {
+			let connection: Database.Connection
+			
+			func execute(_ statement: Database.Statement, with bindings: [Database.Statement.Binding] = []) async -> Database.Statement.ExecutionOutput {
+				return await connection.queryStrings(statement, bindings: bindings)
+			}
+		}
+		
+		var querier: Querier {
+			.init(connection: connection)
+		}
 	}
 	
 //	let inputDatabaseData: Data?
@@ -126,7 +138,7 @@ struct BucketObjectSqliteView: View {
 				Section("Tables") {
 					List {
 						ForEach(tableNames, id: \.self) { tableName in
-							Text(tableName)
+							NavigationLink(tableName, destination: TableView(tableName: tableName, querier: model.querier))
 						}
 					}
 					.listStyle(.plain)
@@ -256,6 +268,63 @@ struct BucketObjectSqliteView: View {
 				Text(data.map({ String(format:"%02x", $0) }).joined())
 					.font(.system(.body, design: .monospaced))
 					.textSelection(.enabled)
+			}
+		}
+	}
+	
+	struct TableView: View {
+		let tableName: String
+		let querier: Model.Querier
+		@State private var tableInfoResult: Result<TableInfo, Database.Error>?
+		
+		var body: some View {
+			Group {
+				switch tableInfoResult {
+				case .none:
+					Text("Loading…")
+				case .success(let tableInfo):
+					Section("Schema") {
+						List {
+							ForEach(0..<tableInfo.columnCount, id: \.self) { column in
+								HStack {
+									let (name, type) = tableInfo[column: column]
+									Text(name).fontWeight(.bold)
+									Spacer()
+									Text(type)
+								}
+							}
+						}
+					}
+				case .failure(let error):
+					Text("Error \(error.localizedDescription)")
+				}
+			}
+			.task {
+				Task {
+					tableInfoResult = await Result(work: {
+						return try await TableInfo(tableName: tableName, querier: querier)
+					})
+				}
+			}
+			.navigationTitle("Table \(tableName)")
+		}
+		
+		struct TableInfo {
+			private var output: Database.Statement.ExecutionSuccessfulOutput
+			
+			init(tableName: String, querier: Model.Querier) async throws {
+				let output = await querier.execute("select cid, pk, name, type, 'notnull' from pragma_table_info(?)", with: [.string(tableName)])
+				self.output = try output.result.get()
+			}
+			
+			var columnCount: Int {
+				output.rows.count
+			}
+			
+			subscript(column column: Int) -> (name: String, type: String) {
+				let name = output.rows[column][2]!
+				let type = output.rows[column][3]!
+				return (name: name, type: type)
 			}
 		}
 	}

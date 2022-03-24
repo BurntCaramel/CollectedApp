@@ -31,6 +31,7 @@ class BucketViewModel: ObservableObject {
 	@Published var imageObjects: [Object]?
 	@Published var textObjects: [Object]?
 	@Published var pdfObjects: [Object]?
+	@Published var sqliteObjects: [Object]?
 	@Published var error: Error?
 	
 	/*struct Model {
@@ -117,6 +118,15 @@ class BucketViewModel: ObservableObject {
 	func loadPDFs() async {
 		do {
 			pdfObjects = try await bucket.listPDFs().compactMap(Object.init)
+		}
+		catch (let error) {
+			self.error = error
+		}
+	}
+	
+	func loadSQLiteDatabases() async {
+		do {
+			sqliteObjects = try await bucket.listSQLiteDatabases().compactMap(Object.init)
 		}
 		catch (let error) {
 			self.error = error
